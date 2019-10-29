@@ -162,7 +162,11 @@ calculation error below */
  that was written to ptr. Update the first free value by the number of bytes
  written for this undo record.
  @return offset of the inserted entry on the page if succeeded, 0 if fail */
+
 static ulint trx_undo_page_set_next_prev_and_add(
+#ifdef UNIV_NVDIMM_CACHE
+    bool is_nvm_page,
+#endif /* UNIV_NVDIMM_CACHE */
     page_t *undo_page, /*!< in/out: undo log page */
     byte *ptr,         /*!< in: ptr up to where data has been
                        written on this undo page. */
@@ -200,10 +204,10 @@ static ulint trx_undo_page_set_next_prev_and_add(
 
   /* Write this log entry to the UNDO log */
 #ifdef UNIV_NVDIMM_CACHE
-  if (false){
-	/*skip generate UNDO logs and REDO logs of UNDO page*/
+  if (is_nvm_page){
+      /*skip generate UNDO logs and REDO logs of UNDO page*/
   } else {
-	trx_undof_page_add_undo_rec_log(undo_page, first_free, end_of_rec, mtr);
+      trx_undof_page_add_undo_rec_log(undo_page, first_free, end_of_rec, mtr);
   }
 #else
   trx_undof_page_add_undo_rec_log(undo_page, first_free, end_of_rec, mtr);
@@ -433,6 +437,9 @@ static bool trx_undo_report_insert_virtual(page_t *undo_page,
 /** Reports in the undo log of an insert of a clustered index record.
  @return offset of the inserted entry on the page if succeed, 0 if fail */
 static ulint trx_undo_page_report_insert(
+#ifdef UNIV_NVDIMM_CACHE
+    bool is_nvm_page,
+#endif /* UNIV_NVDIMM_CACHE */
     page_t *undo_page,           /*!< in: undo log page */
     trx_t *trx,                  /*!< in: transaction */
     dict_index_t *index,         /*!< in: clustered index */
@@ -498,7 +505,11 @@ static ulint trx_undo_page_report_insert(
     }
   }
 
+#ifdef UNIV_NVDIMM_CACHE
+  return (trx_undo_page_set_next_prev_and_add(is_nvm_page, undo_page, ptr, mtr));
+#else
   return (trx_undo_page_set_next_prev_and_add(undo_page, ptr, mtr));
+#endif /* UNIV_NVDIMM_CACHE */
 }
 
 /** Reads from an undo log record the general parameters.
@@ -1604,7 +1615,7 @@ static ulint trx_undo_page_report_modify(
   /* Write to the REDO log about this change in the UNDO log */
 #ifdef UNIV_NVDIMM_CACHE
   /*Skip write REDO log for UNDO page of hot pages*/
-  if (false) {
+  if (true) {
 	  /*skip*/
   } else {
 	trx_undof_page_add_undo_rec_log(undo_page, first_free, ptr - undo_page, mtr);
@@ -2009,6 +2020,9 @@ byte *trx_undo_parse_erase_page_end(
  transaction.
  @return DB_SUCCESS or error code */
 dberr_t trx_undo_report_row_operation(
+#ifdef UNIV_NVDIMM_CACHE
+    bool is_nvm_page,
+#endif /* UNIV_NVDIMM_CACHE */
     ulint flags,                 /*!< in: if BTR_NO_UNDO_LOG_FLAG bit is
                                  set, does nothing */
     ulint op_type,               /*!< in: TRX_UNDO_INSERT_OP or
@@ -2152,8 +2166,13 @@ dberr_t trx_undo_report_row_operation(
 
     switch (op_type) {
       case TRX_UNDO_INSERT_OP:
-        offset = trx_undo_page_report_insert(undo_page, trx, index, clust_entry,
-                                             &mtr);
+#ifdef UNIV_NVDIMM_CACHE
+          offset = trx_undo_page_report_insert(is_nvm_page, undo_page, trx, index, clust_entry,
+                  &mtr);
+#else
+          offset = trx_undo_page_report_insert(undo_page, trx, index, clust_entry,
+                  &mtr);
+#endif /* UNIV_NVDIMM_CACHE */
         break;
       default:
         ut_ad(op_type == TRX_UNDO_MODIFY_OP);

@@ -1382,13 +1382,20 @@ rec_t *page_cur_insert_rec_low(
   /* 9. Write log record of the insert */
   if (UNIV_LIKELY(mtr != NULL)) {
 #ifdef UNIV_NVDIMM_CACHE
-	bool is_nvm_page = false;
-	if (is_nvm_page) {
-		/*skip generating REDO log for nvm-page*/
-	} else {
-		page_cur_insert_rec_write_log(insert_rec, rec_size, current_rec, index,
-                                  mtr);
-	}
+      page_no_t page_no = page_get_page_no(page);
+      space_id_t space_id = page_get_space_id(page);
+      buf_block_t* nvm_block = buf_page_get(page_id_t(space_id, page_no),
+              dict_table_page_size(index->table), RW_X_LATCH, mtr);
+
+      assert(nvm_block != nullptr);
+      buf_page_t* nvm_bpage = &nvm_block->page;
+
+      if (nvm_bpage->cached_in_nvdimm) {
+          /*skip generating REDO log for nvm-page*/
+      } else {
+          page_cur_insert_rec_write_log(insert_rec, rec_size, current_rec, index,
+                  mtr);
+      }
 #else
     page_cur_insert_rec_write_log(insert_rec, rec_size, current_rec, index,
                                   mtr);
@@ -1741,13 +1748,17 @@ rec_t *page_cur_insert_rec_zip(
       if (!log_compressed) {
         if (page_zip_compress(page_zip, page, index, level, NULL)) {
 #ifdef UNIV_NVDIMM_CACHE
-		  bool is_nvm_page = false;
-		  if (is_nvm_page) {
-			/*skip generating REDO log for nvm-page*/
-		  } else {
-			page_cur_insert_rec_write_log(insert_rec, rec_size, cursor->rec,
-                                        index, mtr);
-		  }
+            buf_block_t* nvm_block = page_cur_get_block(cursor);
+            assert(nvm_block != nullptr);
+
+            buf_page_t* nvm_bpage = &nvm_block->page;
+            
+            if (nvm_bpage->cached_in_nvdimm) {
+                /*skip generating REDO log for nvm-page*/
+            } else {
+                page_cur_insert_rec_write_log(insert_rec, rec_size, cursor->rec,
+                        index, mtr);
+            }
 #else
           page_cur_insert_rec_write_log(insert_rec, rec_size, cursor->rec,
                                         index, mtr);
@@ -1985,13 +1996,17 @@ rec_t *page_cur_insert_rec_zip(
   /* 9. Write log record of the insert */
   if (UNIV_LIKELY(mtr != NULL)) {
 #ifdef UNIV_NVDIMM_CACHE
-	bool is_nvm_page = false;
-	if (is_nvm_page) {
-		/*skip generating REDO logs for nvm-page*/
-	} else {
-		page_cur_insert_rec_write_log(insert_rec, rec_size, cursor->rec, index,
-                                  mtr);
-	}
+      buf_block_t* nvm_block = page_cur_get_block(cursor);
+      assert(nvm_block != nullptr);
+
+      buf_page_t* nvm_bpage = &nvm_block->page;
+      
+      if (nvm_bpage->cached_in_nvdimm) {
+          /*skip generating REDO logs for nvm-page*/
+      } else {
+          page_cur_insert_rec_write_log(insert_rec, rec_size, cursor->rec, index,
+                  mtr);
+      }
 #else
     page_cur_insert_rec_write_log(insert_rec, rec_size, cursor->rec, index,
                                   mtr);
@@ -2190,12 +2205,19 @@ void page_copy_rec_list_end_to_created_page(
 
     rec_offs_make_valid(insert_rec, index, offsets);
 #ifdef UNIV_NVDIMM_CACHE
-	bool is_nvm_page = false;
-	if (is_nvm_page) {
-		/*skip generating REDO logs for nvm-page*/
-	} else {
-		page_cur_insert_rec_write_log(insert_rec, rec_size, prev_rec, index, mtr);
-	}
+    page_no_t page_no = page_get_page_no(new_page);
+    space_id_t space_id = page_get_space_id(new_page);
+    buf_block_t* nvm_block = buf_page_get(page_id_t(space_id, page_no),
+            dict_table_page_size(index->table), RW_X_LATCH, mtr);
+    assert(nvm_block != nullptr);
+    
+    buf_page_t* nvm_bpage = &nvm_block->page;
+    
+    if (nvm_bpage->cached_in_nvdimm) {
+        /*skip generating REDO logs for nvm-page*/
+    } else {
+        page_cur_insert_rec_write_log(insert_rec, rec_size, prev_rec, index, mtr);
+    }
 #else
     page_cur_insert_rec_write_log(insert_rec, rec_size, prev_rec, index, mtr);
 #endif /* UNIV_NVDIMM_CACHE */

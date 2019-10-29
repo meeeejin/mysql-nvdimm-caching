@@ -14,4 +14,5 @@ cd $BUILD_DIR
 # Build and install the source code
 echo "Start build"
 cmake .. -DCMAKE_C_FLAGS="-DUNIV_NVDIMM_CACHE" -DCMAKE_CXX_FLAGS="-DUNIV_NVDIMM_CACHE" -DDOWNLOAD_BOOST=ON -DWITH_BOOST=$BASE_DIR/boost
-make -j8 install
+make -j8
+sudo make install
