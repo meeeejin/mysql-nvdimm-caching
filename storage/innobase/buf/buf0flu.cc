@@ -2305,12 +2305,18 @@ static ulint buf_flush_LRU_list(buf_pool_t *buf_pool) {
 #ifdef UNIV_NVDIMM_CACHE
   if (buf_pool->instance_no == 8){
     scan_depth = 256;
-#endif /* UNIV_NVDIMM_CACHE */
   } else if (withdraw_depth > srv_LRU_scan_depth) {
     scan_depth = ut_min(withdraw_depth, scan_depth);
   } else {
     scan_depth = ut_min(static_cast<ulint>(srv_LRU_scan_depth), scan_depth);
   }
+#else
+  if (withdraw_depth > srv_LRU_scan_depth) {
+      scan_depth = ut_min(withdraw_depth, scan_depth);
+  } else {
+      scan_depth = ut_min(static_cast<ulint>(srv_LRU_scan_depth), scan_depth);
+  }
+#endif /* UNIV_NVDIMM_CACHE */
 
   /* Currently one of page_cleaners is the only thread
   that can trigger an LRU flush at the same time.

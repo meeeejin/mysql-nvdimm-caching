@@ -3390,7 +3390,7 @@ dberr_t btr_cur_update_in_place(
   ibool is_hashed;
 #ifdef UNIV_NVDIMM_CACHE
   bool is_nvm_page = false;
-#endif
+#endif /* UNIV_NVDIMM_CACHE */
 
   rec = btr_cur_get_rec(cursor);
   index = cursor->index;

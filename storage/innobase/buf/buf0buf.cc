@@ -4843,7 +4843,7 @@ buf_page_t *buf_page_init_for_read(dberr_t *err, ulint mode,
     buf_pool = buf_pool_get(page_id);
   }
 #else
-    buf_pool = buf_pool_get(page_id);
+  buf_pool = buf_pool_get(page_id);
 #endif /* UNIV_NVDIMM_CACHE */
 
   ut_ad(buf_pool);
@@ -5541,7 +5541,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       if (buf_pool->instance_no == 8) {
         bpage->cached_in_nvdimm = true;
         
-	srv_stats.nvdimm_pages_stored.inc();
+        srv_stats.nvdimm_pages_stored.inc();
         srv_stats.nvdimm_pages_written.inc();
       }
 #endif /* UNIV_NVDIMM_CACHE */
@@ -6459,7 +6459,7 @@ void buf_print_io(FILE *file) /*!< in/out: buffer where to print */
         (srv_buf_pool_instances + 2) * sizeof *pool_info);
 #else
     pool_info = (buf_pool_info_t *)ut_zalloc_nokey(
-	(srv_buf_pool_instances + 1) * sizeof *pool_info);
+	    (srv_buf_pool_instances + 1) * sizeof *pool_info);
 #endif /* UNIV_NVDIMM_CACHE */
     pool_info_total = &pool_info[srv_buf_pool_instances + 1];
   } else {

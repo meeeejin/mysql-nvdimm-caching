@@ -1648,7 +1648,7 @@ byte *trx_undo_update_rec_get_update(
                                 be preserved as long as the update vector is
                                 used, as we do NOT copy the data in the
                                 record! */
-    const dict_index_t *index,  /*!< in: clustered index */
+    dict_index_t *index,  /*!< in: clustered index */
     ulint type,                 /*!< in: TRX_UNDO_UPD_EXIST_REC,
                                 TRX_UNDO_UPD_DEL_REC, or
                                 TRX_UNDO_DEL_MARK_REC; in the last case,
@@ -2343,7 +2343,7 @@ static MY_ATTRIBUTE((warn_unused_result)) bool trx_undo_get_undo_rec(
 bool trx_undo_prev_version_build(
     const rec_t *index_rec ATTRIB_USED_ONLY_IN_DEBUG,
     mtr_t *index_mtr ATTRIB_USED_ONLY_IN_DEBUG, const rec_t *rec,
-    const dict_index_t *const index, ulint *offsets, mem_heap_t *heap,
+    dict_index_t *index, ulint *offsets, mem_heap_t *heap,
     rec_t **old_vers, mem_heap_t *v_heap, const dtuple_t **vrow, ulint v_status,
     lob::undo_vers_t *lob_undo) {
   DBUG_ENTER("trx_undo_prev_version_build");
