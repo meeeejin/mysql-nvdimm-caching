@@ -1396,7 +1396,7 @@ ibool buf_flush_page(buf_pool_t *buf_pool, buf_page_t *bpage,
         flush_type = BUF_FLUSH_TO_NVDIMM;
       }
     } 
-    /* end */
+#endif /* UNIV_NVDIMM_CACHE */
 
     if (flush_type == BUF_FLUSH_LIST && is_uncompressed &&
         !rw_lock_sx_lock_nowait(rw_lock, BUF_IO_WRITE)) {

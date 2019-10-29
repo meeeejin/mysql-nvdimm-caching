@@ -5499,7 +5499,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
 #ifdef UNIV_NVDIMM_CACHE
           || buf_page_get_flush_type(bpage) == BUF_FLUSH_TO_NVDIMM
 #endif /* UNIV_NVDIMM_CACHE */
-	))}
+	)) {
     have_LRU_mutex = true; /* optimistic */
   } else {
     mutex_exit(&buf_pool->LRU_list_mutex);
