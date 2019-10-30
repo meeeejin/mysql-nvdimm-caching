@@ -10,7 +10,7 @@ Optimize MySQL/InnoDB using NVDIMM
 $ git clone https://github.com/meeeejin/mysql-nvdimm-caching.git
 ```
 
-2. Change the value of `BASE_DIR` in the `build.sh` file to the desired value.
+2. Change the value of `BASE_DIR` in the `build.sh` file to the desired value:
 
 ```bash
 $ vi build.sh
@@ -25,3 +25,31 @@ BASE_DIR=/home/xxx/mysql-nvdimm-caching
 ```bash
 $ ./build.sh
 ```
+
+## Run
+
+1. Add the following three server variables to the `my.cnf` file:
+
+| System Variable                     | Description | 
+| :---------------------------------- | :---------- |
+| innodb_use_nvdimm_buffer            | Specifies whether to use NVDIMM cache. **true** or **false**. |
+| innodb_nvdimm_buffer_pool_size      | The size in bytes of the NVDIMM cache. The default value is 2GB. |
+| innodb_nvdimm_buffer_pool_instances | The number of regions that the NVDIMM cache is divided into. The default value is 1. |
+
+For example:
+
+```bash
+$ vi my.cnf
+...
+innodb_use_nvdimm_buffer=true
+innodb_nvdimm_buffer_pool_size=2G
+innodb_nvdimm_buffer_pool_instances=1
+...
+```
+
+2. Run the MySQL server:
+
+```bash
+$ cd bld
+$ ./bin/mysqld --defaults-file=my-nvdimm.cnf --disable-log-bin
+``` 
