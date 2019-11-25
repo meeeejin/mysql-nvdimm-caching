@@ -1100,6 +1100,10 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
                                       bool sync) {
   page_t *frame = NULL;
 
+  /* mijin */
+  lsn_t before_lsn = mach_read_from_8(reinterpret_cast<const buf_block_t *>(bpage)->frame + FIL_PAGE_LSN);
+  /* end */
+
 #ifdef UNIV_DEBUG
   buf_pool_t *buf_pool = buf_pool_from_bpage(bpage);
   ut_ad(!mutex_own(&buf_pool->LRU_list_mutex));
@@ -1184,6 +1188,15 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
   adds an overhead during flushing. */
 
 #ifdef UNIV_NVDIMM_CACHE
+  /* mijin */
+  /*ib::info(ER_IB_MSG_126) << "(" << bpage->id.space() << ", " << bpage->id.page_no()
+      << ") is written with oldest: " << bpage->oldest_modification
+      << " newest: " << before_lsn 
+      << " root: " << page_is_root(reinterpret_cast<const buf_block_t *>(bpage)->frame)
+      << " leaf: " << page_is_leaf(reinterpret_cast<const buf_block_t *>(bpage)->frame)
+      << " flush-type: " << bpage->flush_type << " buf-fix-count: " << bpage->buf_fix_count;
+  *//* end */
+  
   if (flush_type == BUF_FLUSH_TO_NVDIMM) {
       buf_page_t *nvdimm_page;
 	  page_id_t page_id(bpage->id.space(), bpage->id.page_no());
