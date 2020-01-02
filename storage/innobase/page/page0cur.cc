@@ -1391,7 +1391,7 @@ rec_t *page_cur_insert_rec_low(
       buf_page_t* nvm_bpage = &nvm_block->page;
 
       if (nvm_bpage->cached_in_nvdimm) {
-          /*skip generating REDO log for nvm-page*/
+          // skip generating REDO log for nvm-page
       } else {
           page_cur_insert_rec_write_log(insert_rec, rec_size, current_rec, index,
                   mtr);
@@ -1754,7 +1754,7 @@ rec_t *page_cur_insert_rec_zip(
             buf_page_t* nvm_bpage = &nvm_block->page;
             
             if (nvm_bpage->cached_in_nvdimm) {
-                /*skip generating REDO log for nvm-page*/
+                // skip generating REDO log for nvm-page
             } else {
                 page_cur_insert_rec_write_log(insert_rec, rec_size, cursor->rec,
                         index, mtr);
@@ -2002,7 +2002,7 @@ rec_t *page_cur_insert_rec_zip(
       buf_page_t* nvm_bpage = &nvm_block->page;
       
       if (nvm_bpage->cached_in_nvdimm) {
-          /*skip generating REDO logs for nvm-page*/
+          // skip generating REDO logs for nvm-page
       } else {
           page_cur_insert_rec_write_log(insert_rec, rec_size, cursor->rec, index,
                   mtr);
@@ -2214,7 +2214,7 @@ void page_copy_rec_list_end_to_created_page(
     buf_page_t* nvm_bpage = &nvm_block->page;
     
     if (nvm_bpage->cached_in_nvdimm) {
-        /*skip generating REDO logs for nvm-page*/
+        // skip generating REDO logs for nvm-page
     } else {
         page_cur_insert_rec_write_log(insert_rec, rec_size, prev_rec, index, mtr);
     }

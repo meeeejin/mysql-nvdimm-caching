@@ -3501,7 +3501,7 @@ dberr_t btr_cur_update_in_place(
   nvm_bpage = &(nvm_block->page);
   
   if (nvm_bpage->cached_in_nvdimm) {
-      /*skip generating REDO logs for NVM-resident pages*/
+      // skip generating REDO logs for NVM-resident pages
   } else {
       btr_cur_update_in_place_log(flags, rec, index, update, trx_id, roll_ptr, mtr);
   }
@@ -4431,7 +4431,7 @@ dberr_t btr_cur_del_mark_set_clust_rec(
   row_upd_rec_sys_fields(rec, page_zip, index, offsets, trx, roll_ptr);
 #ifdef UNIV_NVDIMM_CACHE
   if (is_nvm_page) {
-	  /*skip generating REDO logs for nvm-page*/
+	  // skip generating REDO logs for nvm-page
   } else {
 	btr_cur_del_mark_set_clust_rec_log(rec, index, trx->id, roll_ptr, mtr);
   }

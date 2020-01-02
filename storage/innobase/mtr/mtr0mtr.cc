@@ -488,6 +488,20 @@ void mtr_t::commit() {
   }
 }
 
+#ifdef UNIV_NVDIMM_CACHE
+/** Commit a mini-transaction for NVDIMM resident page. */
+void mtr_t::commit_nvm() {
+    ut_ad(is_active());
+    ut_ad(!is_inside_ibuf());
+    ut_ad(m_impl.m_magic_n == MTR_MAGIC_N);
+    m_impl.m_state = MTR_STATE_COMMITTING;
+    // jhpark: release the mtr structure 
+    Command cmd(this);
+    cmd.release_all();
+    cmd.release_resources();
+}
+#endif /* UNIV_NVDIMM_CACHE */
+
 #ifndef UNIV_HOTBACKUP
 /** Acquire a tablespace X-latch.
 @param[in]	space		tablespace instance

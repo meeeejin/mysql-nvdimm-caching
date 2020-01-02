@@ -656,6 +656,9 @@ extern mysql_pfs_key_t log_write_notifier_thread_key;
 extern mysql_pfs_key_t log_flush_notifier_thread_key;
 extern mysql_pfs_key_t page_flush_coordinator_thread_key;
 extern mysql_pfs_key_t page_flush_thread_key;
+#ifdef UNIV_NVDIMM_CACHE
+extern mysql_pfs_key_t page_flush_nvdimm_thread_key;
+#endif /* UNIV_NVDIMM_CACHE */
 extern mysql_pfs_key_t recv_writer_thread_key;
 extern mysql_pfs_key_t srv_error_monitor_thread_key;
 extern mysql_pfs_key_t srv_lock_timeout_thread_key;

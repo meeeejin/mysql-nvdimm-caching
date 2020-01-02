@@ -58,6 +58,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 /** Commit a mini-transaction. */
 #define mtr_commit(m) (m)->commit()
 
+#ifdef UNIV_NVDIMM_CACHE
+/** Commit a mini-transaction for nvdimm resident pages */
+#define mtr_commit_nvm(m) (m)->commit_nvm()
+#endif /* UNIV_NVDIMM_CACHE */
+
 /** Set and return a savepoint in mtr.
 @return	savepoint */
 #define mtr_set_savepoint(m) (m)->get_savepoint()
@@ -237,6 +242,11 @@ struct mtr_t {
 
   /** Commit the mini-transaction. */
   void commit();
+
+#ifdef UNIV_NVDIMM_CACHE
+  /** Commit the mini-transaction for nvm residnt page. */
+  void commit_nvm();
+#endif /* UNIV_NVDIMM_CACHE */
 
   /** Return current size of the buffer.
   @return	savepoint */

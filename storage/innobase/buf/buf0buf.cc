@@ -82,6 +82,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #ifdef UNIV_NVDIMM_CACHE
 #include "buf0nvdimm.h"
+bool nvdimm_flush_check = false;
 #endif /* UNIV_NVDIMM_CACHE */
 
 #ifdef HAVE_LIBNUMA
@@ -3804,9 +3805,9 @@ buf_block_t *Buf_fetch<T>::lookup() {
   }
 
 #ifdef UNIV_NVDIMM_CACHE
-  if (m_buf_pool->instance_no == 8) {
+/*  if (m_buf_pool->instance_no == 8) {
     srv_stats.nvdimm_pages_read.inc();
-  }
+  }*/
 #endif /* UNIV_NVDIMM_CACHE */
 
   return (block);
@@ -4730,6 +4731,7 @@ void buf_page_init_low(buf_page_t *bpage) /*!< in: block to init */
 
 #ifdef UNIV_NVDIMM_CACHE
   bpage->cached_in_nvdimm = false;
+  bpage->temp_flush_type = 0;
 #endif /* UNIV_NVDIMM_CACHE */
 
   ut_d(bpage->file_page_was_freed = FALSE);
@@ -5181,6 +5183,12 @@ static void buf_page_monitor(
 {
   monitor_id_t counter;
 
+/* mijin */
+  if (!(io_type == BUF_IO_READ || io_type == BUF_IO_WRITE)) {
+    fprintf(stderr, "(%u, %u) %lu %d %d %d\n", bpage->id.space(), bpage->id.page_no(),
+    bpage->buf_pool_index, bpage->flush_type, bpage->temp_flush_type, io_type);    
+  }
+  /* end */
   ut_a(io_type == BUF_IO_READ || io_type == BUF_IO_WRITE);
 
   const byte *frame =
@@ -5349,10 +5357,10 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
   ut_ad(io_type == BUF_IO_READ || io_type == BUF_IO_WRITE);
 
   if (io_type == BUF_IO_READ) {
-    page_no_t read_page_no;
-    space_id_t read_space_id;
-    byte *frame;
-    bool compressed_page;
+      page_no_t read_page_no;
+      space_id_t read_space_id;
+      byte *frame;
+      bool compressed_page;
 
     if (bpage->size.is_compressed()) {
       frame = bpage->zip.data;
@@ -5497,7 +5505,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
           buf_page_get_flush_type(bpage) == BUF_FLUSH_LRU ||
           buf_page_get_flush_type(bpage) == BUF_FLUSH_SINGLE_PAGE
 #ifdef UNIV_NVDIMM_CACHE
-          || buf_page_get_flush_type(bpage) == BUF_FLUSH_TO_NVDIMM
+          || bpage->temp_flush_type == BUF_FLUSH_TO_NVDIMM
 #endif /* UNIV_NVDIMM_CACHE */
 	)) {
     have_LRU_mutex = true; /* optimistic */
@@ -5540,9 +5548,6 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
 #ifdef UNIV_NVDIMM_CACHE
       if (buf_pool->instance_no == 8) {
         bpage->cached_in_nvdimm = true;
-        
-        srv_stats.nvdimm_pages_stored.inc();
-        srv_stats.nvdimm_pages_written.inc();
       }
 #endif /* UNIV_NVDIMM_CACHE */
 
@@ -5552,6 +5557,22 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       os_atomic_decrement_ulint(&buf_pool->n_pend_reads, 1);
       os_atomic_increment_ulint(&buf_pool->stat.n_pages_read, 1);
       
+#ifdef UNIV_NVDIMM_CACHE
+      if (buf_pool->instance_no == 8) {
+          //srv_stats.nvdimm_pages_stored.inc();
+          //srv_stats.nvdimm_pages_written.inc();
+
+          //mutex_enter(&buf_pool->free_list_mutex);
+          ulint remains = UT_LIST_GET_LEN(buf_pool->free);
+          //mutex_exit(&buf_pool->free_list_mutex);
+
+          if (/*!nvdimm_flush_check && */remains < 250000) {
+              //nvdimm_flush_check = true;
+              os_event_set(buf_flush_nvdimm_event);
+          }
+      }
+#endif /* UNIV_NVDIMM_CACHE */
+
       break;
 
     case BUF_IO_WRITE:
@@ -5559,9 +5580,27 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       routine in the flush system */
 
       buf_flush_write_complete(bpage);
-
+      
       if (uncompressed) {
         rw_lock_sx_unlock_gen(&((buf_block_t *)bpage)->lock, BUF_IO_WRITE);
+      
+#if 0
+        /* mijin */
+        if (buf_page_get_flush_type(bpage) == BUF_FLUSH_LIST) {
+            fprintf(stderr, "(%u, %u) %lu %d is unlocked\n",
+                    bpage->id.space(), bpage->id.page_no(), bpage->buf_pool_index,
+                    bpage->temp_flush_type);
+        }
+        /* end */
+      } else {
+          /* mijin */
+          if (buf_page_get_flush_type(bpage) == BUF_FLUSH_LIST) {
+              fprintf(stderr, "(%u, %u) %lu %d failed to unlock..uncompressed %d\n",
+                      bpage->id.space(), bpage->id.page_no(), bpage->buf_pool_index,
+                      bpage->temp_flush_type, buf_page_get_state(bpage));
+          }
+          /* end */
+#endif
       }
 
       os_atomic_increment_ulint(&buf_pool->stat.n_pages_written, 1);
@@ -5572,11 +5611,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       * BUF_FLUSH_LRU: always evict
       * BUF_FLUSH_SINGLE_PAGE: eviction preference is passed
       by the caller explicitly. */
-      if (buf_page_get_flush_type(bpage) == BUF_FLUSH_LRU
-#ifdef UNIV_NVDIMM_CACHE
-          || buf_page_get_flush_type(bpage) == BUF_FLUSH_TO_NVDIMM
-#endif /* UNIV_NVDIMM_CACHE */
-	 ) {
+      if (buf_page_get_flush_type(bpage) == BUF_FLUSH_LRU) {
         evict = true;
         ut_ad(have_LRU_mutex);
       }
@@ -5589,6 +5624,10 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       if (have_LRU_mutex) {
         mutex_exit(&buf_pool->LRU_list_mutex);
       }
+
+#ifdef NVDIMM_CACHE
+      bpage->temp_flush_type = 0;
+#endif /* NVDIMM_CACHE */
 
       break;
 
@@ -6355,13 +6394,20 @@ static void buf_print_nvdimm_instance(
 
   pages_written_rate =
     srv_stats.nvdimm_pages_written / time_elapsed;
-
+   
   fprintf(file,
+      "page stored %lu + %lu and page written %lu\n",
+      (ulint)srv_stats.nvdimm_pages_stored,
+      (ulint)srv_stats.nvdimm_pages_read,
+      (ulint)srv_stats.nvdimm_pages_written);
+
+  /*fprintf(file,
       "Buffer pool usage rate %lu / %lu = %.2f,"
       " page read rate %.2f (%lu) and page written rate %.2f (%lu)\n",
       (ulint)srv_stats.nvdimm_pages_stored, buf_pool->curr_size,
       nvdimm_usage_rate, pages_read_rate, (ulint)srv_stats.nvdimm_pages_read,
       pages_written_rate, (ulint)srv_stats.nvdimm_pages_written);
+*/
 
   fprintf(file, "Total gets: " ULINTPF "\n", pool_info->n_page_gets);
 }
@@ -6720,9 +6766,11 @@ void buf_pool_free_all() {
 bool buf_block_will_be_moved_to_nvdimm(const page_id_t &page_id) {
   if (page_id.space() == 4294967279 || page_id.space() == 4294967278 /* Undo tablespaces */
       || page_id.space() == 15 /* New-Orders table */) {
-    return (true);
+      srv_stats.nvdimm_pages_read.inc();
+     // fprintf(stderr, "%u %u is directly moved to dram\n", page_id.space(), page_id.page_no());
+      return (true);
   } else {
-    return (false);
+      return (false);
   }
 }
 #endif /* UNIV_NVDIMM_CACHE */

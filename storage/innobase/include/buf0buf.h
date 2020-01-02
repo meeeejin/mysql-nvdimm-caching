@@ -1321,6 +1321,8 @@ class buf_page_t {
 #ifdef UNIV_NVDIMM_CACHE
   bool cached_in_nvdimm; /*!< TRUE if the page is cached
                          in the NVDIMM buffer */
+  unsigned temp_flush_type : 2; /*!< The temporary flush
+                                  type before being cached */
 #endif /* UNIV_NVDIMM_CACHE */
 };
 
