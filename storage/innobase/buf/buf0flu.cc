@@ -729,10 +729,9 @@ bool buf_flush_ready_for_flush(buf_page_t *bpage, buf_flush_t flush_type) {
     case BUF_FLUSH_LRU:
     case BUF_FLUSH_SINGLE_PAGE:
       return (true);
-
-#ifdef UNIV_NVDIMM_CACHE
-    case BUF_FLUSH_TO_NVDIMM:
-#endif /* UNIV_NVDIMM_CACHE */
+//#ifdef UNIV_NVDIMM_CACHE
+//    case BUF_FLUSH_TO_NVDIMM:
+//#endif /* UNIV_NVDIMM_CACHE */
     case BUF_FLUSH_N_TYPES:
       break;
   }
@@ -1205,45 +1204,37 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
       << " flush-type: " << bpage->flush_type << " buf-fix-count: " << bpage->buf_fix_count;
   *//* end */
   
-  if (flush_type == BUF_FLUSH_TO_NVDIMM) {
+  if (bpage->moved_to_nvdimm && bpage->buf_fix_count == 0) {
       buf_page_t *nvdimm_page;
 	  page_id_t page_id(bpage->id.space(), bpage->id.page_no());
 	  const page_size_t page_size = page_size_t(bpage->size.logical(), bpage->size.logical(), false);
 	  dberr_t err;
-	  lsn_t prev_lsn = bpage->newest_modification;
 
 	  /* Add the target page to the NVDIMM buffer. */
 	  nvdimm_page = buf_page_init_for_read(&err, BUF_MOVE_TO_NVDIMM, page_id, page_size, false);
 	  memcpy(((buf_block_t *)nvdimm_page)->frame, ((buf_block_t *)bpage)->frame, UNIV_PAGE_SIZE);
 
-	  /* Remove the target page from the original buffer pool. */
-	  buf_page_io_complete(bpage, true); 
-
-	  /* Set the oldest LSN of the NVDIMM page to the previous newest LSN. */
-	  buf_flush_note_modification((buf_block_t *)nvdimm_page, prev_lsn, 0, nvdimm_page->flush_observer);
-	  buf_page_io_complete(nvdimm_page);
+      /* Set the oldest LSN of the NVDIMM page to the previous newest LSN. */
+	  buf_flush_note_modification((buf_block_t *)nvdimm_page, bpage->newest_modification, 0, nvdimm_page->flush_observer);
+	  
+      /* Remove the target page from the original buffer pool. */
+      buf_page_io_complete(nvdimm_page);
+	  buf_page_io_complete(bpage, true);
 	  
       srv_stats.nvdimm_pages_stored.inc();
-      //fprintf(stderr, "%u %u is moved to dram\n", bpage->id.space(), bpage->id.page_no());
       //srv_stats.nvdimm_pages_written.inc();
   } else {
     if (!srv_use_doublewrite_buf || buf_dblwr == NULL || srv_read_only_mode ||
         fsp_is_system_temporary(bpage->id.space()) || bpage->cached_in_nvdimm) {
       ut_ad(!srv_read_only_mode || fsp_is_system_temporary(bpage->id.space()));
 
+      bpage->moved_to_nvdimm = false;
+
       ulint type = IORequest::WRITE | IORequest::DO_NOT_WAKE;
 
       dberr_t err;
       IORequest request(type);
     
-      // TODO: delete
-      /*if (bpage->cached_in_nvdimm) {
-          srv_stats.nvdimm_pages_written.inc();
-          fprintf(stderr, "%u %u is written from nvdimm\n", bpage->id.space(), bpage->id.page_no());
-      } else {
-          fprintf(stderr, "%u %u is written from dram\n", bpage->id.space(), bpage->id.page_no());
-      }*/
-
       err = fil_io(request, sync, bpage->id, bpage->size, 0,
           bpage->size.physical(), frame, bpage);
 
@@ -1438,8 +1429,7 @@ ibool buf_flush_page(buf_pool_t *buf_pool, buf_page_t *bpage,
       if ((page_type == FIL_PAGE_INDEX || page_type == FIL_PAGE_RTREE) /* Index page */
           && page_is_leaf(frame) /* Leaf page */
           && !bpage->cached_in_nvdimm /* Not cached in NVDIMM */) {
-        bpage->temp_flush_type = BUF_FLUSH_TO_NVDIMM;
-        flush_type = BUF_FLUSH_TO_NVDIMM;
+        bpage->moved_to_nvdimm = true;
       }
     } 
 #endif /* UNIV_NVDIMM_CACHE */ 
@@ -1812,6 +1802,82 @@ static ulint buf_free_from_unzip_LRU_list_batch(buf_pool_t *buf_pool,
 
   return (count);
 }
+
+#ifdef UNIV_NVDIMM_CACHE
+/** This utility flushes dirty blocks from the end of the LRU list.
+The calling thread is not allowed to own any latches on pages!
+It attempts to make 'max' blocks available in the free list. Note that
+it is a best effort attempt and it is not guaranteed that after a call
+to this function there will be 'max' blocks in the free list.
+@param[in]	buf_pool	buffer pool instance
+@param[in]	max		desired number for blocks in the free_list
+@return number of blocks for which the write request was queued. */
+static ulint buf_flush_nvdimm_LRU_list_batch(buf_pool_t *buf_pool, ulint max) {
+  buf_page_t *bpage;
+  ulint evict_count = 0;
+  ulint count = 0;
+
+  ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
+
+  for (bpage = UT_LIST_GET_LAST(buf_pool->LRU);
+       bpage != NULL && count + evict_count < max;
+       bpage = buf_pool->lru_hp.get()) {
+
+      buf_page_t *prev = UT_LIST_GET_PREV(LRU, bpage);
+      buf_pool->lru_hp.set(prev);
+
+      if (bpage->id.space() != 17)  continue;
+      
+      BPageMutex *block_mutex = buf_page_get_mutex(bpage);
+
+      bool acquired = mutex_enter_nowait(block_mutex) == 0;
+
+      if (acquired && buf_flush_ready_for_replace(bpage)) {
+          /* block is ready for eviction i.e., it is
+             clean and is not IO-fixed or buffer fixed. */
+          if (buf_LRU_free_page(bpage, true)) {
+              ++evict_count;
+              mutex_enter(&buf_pool->LRU_list_mutex);
+          } else {
+              mutex_exit(block_mutex);
+          }
+      } else if (acquired && buf_flush_ready_for_flush(bpage, BUF_FLUSH_LRU)) {
+          /* Block is ready for flush. Dispatch an IO
+             request. The IO helper thread will put it on
+             free list in IO completion routine. */
+          mutex_exit(block_mutex);
+          buf_flush_page_and_try_neighbors(bpage, BUF_FLUSH_LRU, max, &count);
+      } else if (!acquired) {
+          ut_ad(buf_pool->lru_hp.is_hp(prev));
+      } else {
+          /* Can't evict or dispatch this block. Go to
+             previous. */
+          mutex_exit(block_mutex);
+          ut_ad(buf_pool->lru_hp.is_hp(prev));
+      }
+
+      ut_ad(!mutex_own(block_mutex));
+      ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
+  }
+
+  buf_pool->lru_hp.set(NULL);
+
+  /* We keep track of all flushes happening as part of LRU
+     flush. When estimating the desired rate at which flush_list
+     should be flushed, we factor in this value. */
+  buf_lru_flush_page_count += count;
+
+  ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
+
+  if (evict_count) {
+      MONITOR_INC_VALUE_CUMULATIVE(MONITOR_LRU_BATCH_EVICT_TOTAL_PAGE,
+              MONITOR_LRU_BATCH_EVICT_COUNT,
+              MONITOR_LRU_BATCH_EVICT_PAGES, evict_count);
+  }
+
+  return (count);
+}
+#endif /* UNIV_NVDIMM_CACHE */
 
 /** This utility flushes dirty blocks from the end of the LRU list.
 The calling thread is not allowed to own any latches on pages!
@@ -2334,21 +2400,11 @@ static ulint buf_flush_LRU_list(buf_pool_t *buf_pool) {
   scan_depth = UT_LIST_GET_LEN(buf_pool->LRU);
   withdraw_depth = buf_get_withdraw_depth(buf_pool);
 
-/*#ifdef UNIV_NVDIMM_CACHE
-  if (buf_pool->instance_no == 8){
-    scan_depth = 256;
-  } else if (withdraw_depth > srv_LRU_scan_depth) {
-    scan_depth = ut_min(withdraw_depth, scan_depth);
-  } else {
-    scan_depth = ut_min(static_cast<ulint>(srv_LRU_scan_depth), scan_depth);
-  }
-#else*/
   if (withdraw_depth > srv_LRU_scan_depth) {
       scan_depth = ut_min(withdraw_depth, scan_depth);
   } else {
       scan_depth = ut_min(static_cast<ulint>(srv_LRU_scan_depth), scan_depth);
   }
-//#endif /* UNIV_NVDIMM_CACHE */
 
   /* Currently one of page_cleaners is the only thread
   that can trigger an LRU flush at the same time.
@@ -2626,12 +2682,6 @@ static ulint page_cleaner_flush_pages_recommendation(lsn_t *lsn_limit,
     mutex_exit(&page_cleaner->mutex);
   }
 
-/*#ifdef UNIV_NVDIMM_CACHE
-  mutex_enter(&page_cleaner->mutex);
-  page_cleaner->slots[8].n_pages_requested = 256;
-  mutex_exit(&page_cleaner->mutex);
-#endif*/ /* UNIV_NVDIMM_CACHE */
-
   sum_pages_for_lsn /= buf_flush_lsn_scan_factor;
   if (sum_pages_for_lsn < 1) {
     sum_pages_for_lsn = 1;
@@ -2742,11 +2792,7 @@ void buf_flush_page_cleaner_init(size_t n_page_cleaners) {
   page_cleaner->is_requested = os_event_create("pc_is_requested");
   page_cleaner->is_finished = os_event_create("pc_is_finished");
 
-//#ifdef UNIV_NVDIMM_CACHE
-//  page_cleaner->n_slots = static_cast<ulint>(srv_buf_pool_instances) + static_cast<ulint>(srv_nvdimm_buf_pool_instances);
-//#else
   page_cleaner->n_slots = static_cast<ulint>(srv_buf_pool_instances);
-//#endif /* UNIV_NVDIMM_CACHE */
 
   page_cleaner->slots = static_cast<page_cleaner_slot_t *>(
       ut_zalloc_nokey(page_cleaner->n_slots * sizeof(*page_cleaner->slots)));
@@ -2898,14 +2944,6 @@ static ulint pc_flush_slot(void) {
       slot->n_flushed_list = 0;
       goto finish;
     }
-
-/*#ifdef UNIV_NVDIMM_CACHE
-    if (buf_pool->instance_no == 8) {
-      slot->n_flushed_list = 0;
-      slot->succeeded_list = true;
-      goto finish;
-    }
-#endif*/ /* UNIV_NVDIMM_CACHE */
 
     /* Flush pages from flush_list if required */
     if (page_cleaner->requested) {
@@ -3172,13 +3210,14 @@ static void buf_flush_nvdimm_page_cleaner_thread() {
         }
 
         /* Flush pages from end of LRU */
-        n_flushed = buf_flush_batch(buf_pool, BUF_FLUSH_LRU, 1024, 0);
+        //n_flushed = buf_flush_batch(buf_pool, BUF_FLUSH_LRU, 1024, 0);
+        mutex_enter(&buf_pool->LRU_list_mutex);
+        n_flushed = buf_flush_nvdimm_LRU_list_batch(buf_pool, 1024);
+        mutex_exit(&buf_pool->LRU_list_mutex);
         
-        //if (n_flushed) {
+        if (n_flushed) {
             /*sig_count = */os_event_reset(buf_flush_nvdimm_event);
-         //   fprintf(stderr, "n_flushed = %lu\n", n_flushed);
-        //}
-
+        }
         //buf_dblwr_flush_buffered_writes();
     }
 

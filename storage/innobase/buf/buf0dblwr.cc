@@ -685,7 +685,6 @@ void buf_dblwr_update(
       fsp_is_system_temporary(bpage->id.space())
 #ifdef UNIV_NVDIMM_CACHE
       || bpage->cached_in_nvdimm
-      || bpage->temp_flush_type == BUF_FLUSH_TO_NVDIMM
 #endif /* UNIV_NVDIMM_CACHE */
       ) {
     return;
@@ -739,9 +738,9 @@ void buf_dblwr_update(
       os_event_set(buf_dblwr->s_event);
       mutex_exit(&buf_dblwr->mutex);
       break;
-#ifdef UNIV_NVDIMM_CACHE
-    case BUF_FLUSH_TO_NVDIMM:
-#endif /* UNIV_NVDIMM_CACHE */
+//#ifdef UNIV_NVDIMM_CACHE
+//    case BUF_FLUSH_TO_NVDIMM:
+//#endif /* UNIV_NVDIMM_CACHE */
     case BUF_FLUSH_N_TYPES:
       ut_error;
   }
