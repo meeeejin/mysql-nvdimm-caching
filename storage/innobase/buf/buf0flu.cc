@@ -2746,7 +2746,7 @@ static ulint pc_sleep_nvdimm_cleaner_if_needed(ulint next_loop_time, int64_t sig
     ulint sleep_us;
 
     sleep_us =
-        ut_min(static_cast<ulint>(100000), (next_loop_time - cur_time) * 1000);
+        ut_min(static_cast<ulint>(500000), (next_loop_time - cur_time) * 1000);
 
     return (os_event_wait_time_low(buf_flush_nvdimm_event, sleep_us, sig_count));
   }
@@ -3149,9 +3149,8 @@ static void buf_flush_nvdimm_page_cleaner_thread() {
 
     ulint n_flushed = 0;
     buf_pool_t *buf_pool = buf_pool_from_array(8);
-    ulint next_loop_time = ut_time_ms() + 100;
+/*    ulint next_loop_time = ut_time_ms() + 500;
 
-/*
     os_event_wait(buf_flush_nvdimm_event);
     int64_t sig_count = os_event_reset(buf_flush_nvdimm_event);
     
@@ -3159,10 +3158,11 @@ static void buf_flush_nvdimm_page_cleaner_thread() {
     ulint warn_interval = 1;
     ulint warn_count = 0;
     ulint last_activity = srv_get_activity_count();
-  */   
+*/
+   
     for (;;) {
         os_event_wait(buf_flush_nvdimm_event);
- /*       if (srv_check_activity(last_activity) || n_flushed == 0) {
+        /*if (srv_check_activity(last_activity) || n_flushed == 0) {
             ret_sleep = pc_sleep_nvdimm_cleaner_if_needed(next_loop_time, sig_count);
         } else if (ut_time_ms() > next_loop_time) {
             ret_sleep = OS_SYNC_TIME_EXCEEDED;
@@ -3175,11 +3175,11 @@ static void buf_flush_nvdimm_page_cleaner_thread() {
         if (ret_sleep == OS_SYNC_TIME_EXCEEDED) {
             ulint curr_time = ut_time_ms();
 
-            if (curr_time > next_loop_time + 500) {
+            if (curr_time > next_loop_time + 1500) {
                 if (warn_count == 0) {
                     ulint us;
 
-                    us = 100 + curr_time - next_loop_time;
+                    us = 500 + curr_time - next_loop_time;
 
                     ib::info(ER_IB_MSG_128)
                         << "NVDIMM Page cleaner took " << us; 
@@ -3195,15 +3195,14 @@ static void buf_flush_nvdimm_page_cleaner_thread() {
                     --warn_count;
                 }
             } else {
-*/                /* reset counter */
-/*                warn_interval = 1;
+            */    /* reset counter */
+            /*    warn_interval = 1;
                 warn_count = 0;
             }
 
-            next_loop_time = curr_time + 100;
+            next_loop_time = curr_time + 500;
         }
 */
-
         /* TODO: Need to fix for shutdown */
         if (!page_cleaner->is_running) {
             break;
