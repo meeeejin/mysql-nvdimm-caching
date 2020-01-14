@@ -1217,6 +1217,11 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
       /* Set the oldest LSN of the NVDIMM page to the previous newest LSN. */
 	  buf_flush_note_modification((buf_block_t *)nvdimm_page, bpage->newest_modification, 0, nvdimm_page->flush_observer);
 	  
+      /*ib::info(ER_IB_MSG_126) << "(" << bpage->id.space() << ", " << bpage->id.page_no()
+          << ") is moved with oldest: " << bpage->oldest_modification
+          << " newest: " << before_lsn 
+          << " flush-type: " << bpage->flush_type;*/
+  
       /* Remove the target page from the original buffer pool. */
       buf_page_io_complete(nvdimm_page);
 	  buf_page_io_complete(bpage, true);
@@ -1234,7 +1239,13 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
 
       dberr_t err;
       IORequest request(type);
-    
+      
+      /*ib::info(ER_IB_MSG_126) << "(" << bpage->id.space() << ", " << bpage->id.page_no()
+          << ") is written from " << bpage->cached_in_nvdimm
+          << " with oldest: " << bpage->oldest_modification
+          << " newest: " << before_lsn 
+          << " flush-type: " << bpage->flush_type;*/
+
       err = fil_io(request, sync, bpage->id, bpage->size, 0,
           bpage->size.physical(), frame, bpage);
 

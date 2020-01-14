@@ -5569,7 +5569,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
           ulint remains = UT_LIST_GET_LEN(buf_pool->free);
           //mutex_exit(&buf_pool->free_list_mutex);
 
-          if (/*!nvdimm_flush_check && */remains < 100000) {
+          if (/*!nvdimm_flush_check && */remains < 10000) {
               //nvdimm_flush_check = true;
               os_event_set(buf_flush_nvdimm_event);
           }
