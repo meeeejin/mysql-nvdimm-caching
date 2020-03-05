@@ -738,9 +738,6 @@ void buf_dblwr_update(
       os_event_set(buf_dblwr->s_event);
       mutex_exit(&buf_dblwr->mutex);
       break;
-//#ifdef UNIV_NVDIMM_CACHE
-//    case BUF_FLUSH_TO_NVDIMM:
-//#endif /* UNIV_NVDIMM_CACHE */
     case BUF_FLUSH_N_TYPES:
       ut_error;
   }

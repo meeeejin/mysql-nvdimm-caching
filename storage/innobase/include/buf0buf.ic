@@ -417,9 +417,6 @@ buf_flush_t buf_page_get_flush_type(
     case BUF_FLUSH_LIST:
     case BUF_FLUSH_SINGLE_PAGE:
       return (flush_type);
-//#ifdef UNIV_NVDIMM_CACHE
-//    case BUF_FLUSH_TO_NVDIMM:
-//#endif /* UNIV_NVDIMM_CACHE */
     case BUF_FLUSH_N_TYPES:
       ut_error;
   }
@@ -937,7 +934,7 @@ buf_pool_t *buf_pool_get(const page_id_t &page_id) {
 #ifdef UNIV_NVDIMM_CACHE
   if (buf_block_will_be_moved_to_nvdimm(page_id)) {
     return (&nvdimm_buf_pool_ptr[0]);
-  } else if (page_id.space() == 17 &&
+  } else if ((page_id.space() == 17/* || page_id.space() == 19*/) &&
       buf_page_hash_get_low(&nvdimm_buf_pool_ptr[0], page_id)) {
     return (&nvdimm_buf_pool_ptr[0]);
   } else {

@@ -1327,11 +1327,7 @@ static void buf_pool_create(buf_pool_t *buf_pool, ulint buf_pool_size,
 
   mutex_create(LATCH_ID_FLUSH_LIST, &buf_pool->flush_list_mutex);
 
-/*#ifdef UNIV_NVDIMM_CACHE
-  for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES - 1; i++) {
-#else
-*/  for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
-//#endif /* UNIV_NVDIMM_CACHE */
+  for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
     buf_pool->no_flush[i] = os_event_create(0);
   }
 
@@ -1489,11 +1485,7 @@ static void nvdimm_buf_pool_create(buf_pool_t *buf_pool, ulint buf_pool_size,
 
   mutex_create(LATCH_ID_FLUSH_LIST, &buf_pool->flush_list_mutex);
 
-/*#ifdef UNIV_NVDIMM_CACHE
-  for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES - 1; i++) {
-#else
-*/  for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
-//#endif /* UNIV_NVDIMM_CACHE */
+  for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
     buf_pool->no_flush[i] = os_event_create(0);
   }
 
@@ -1582,11 +1574,7 @@ static void buf_pool_free_instance(buf_pool_t *buf_pool) {
     buf_pool->deallocate_chunk(chunk);
   }
 
-/*#ifdef UNIV_NVDIMM_CACHE
-  for (ulint i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES - 1; ++i) {
-#else
-*/  for (ulint i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; ++i) {
-//#endif /* UNIV_NVDIMM_CACHE */
+  for (ulint i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; ++i) {
     os_event_destroy(buf_pool->no_flush[i]);
   }
 
@@ -1797,8 +1785,8 @@ dberr_t nvdimm_buf_pool_init(ulint total_size, ulint n_instances) {
     i = n;
   }
 
-  //nvdimm_buf_LRU_old_ratio_update(100 * 3 / 8, FALSE);
-  nvdimm_buf_LRU_old_ratio_update(100 * 0.95, FALSE);
+  nvdimm_buf_LRU_old_ratio_update(100 * 3 / 8, FALSE);
+  //nvdimm_buf_LRU_old_ratio_update(100 * 0.95, FALSE);
 
   return (DB_SUCCESS);
 }
@@ -4856,6 +4844,10 @@ buf_page_t *buf_page_init_for_read(dberr_t *err, ulint mode,
     buf_pool = &nvdimm_buf_pool_ptr[0];
   } else {
     buf_pool = buf_pool_get(page_id);
+    /* mijin: need to delete (just for test) */
+    if (buf_pool->instance_no == 8) {
+        srv_stats.nvdimm_pages_read.inc();
+    }
   }
 #else
   buf_pool = buf_pool_get(page_id);
@@ -5683,11 +5675,7 @@ static void buf_pool_invalidate_instance(buf_pool_t *buf_pool) {
 
   mutex_enter(&buf_pool->flush_state_mutex);
 
-//#ifdef UNIV_NVDIMM_CACHE
-//  for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES - 1; i++) {
-//#else
   for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
-//#endif /* UNIV_NVDIMM_CACHE */
     /* As this function is called during startup and
     during redo application phase during recovery, InnoDB
     is single threaded (apart from IO helper threads) at
@@ -6401,7 +6389,8 @@ static void buf_print_nvdimm_instance(
     srv_stats.nvdimm_pages_written / time_elapsed;
    
   fprintf(file,
-      "page stored %lu + %lu and page written %lu\n",
+      "stock: %lu, etc: %lu, order-line: %lu\n",
+      //"page stored %lu + %lu and page written %lu\n",
       (ulint)srv_stats.nvdimm_pages_stored,
       (ulint)srv_stats.nvdimm_pages_read,
       (ulint)srv_stats.nvdimm_pages_written);
@@ -6771,8 +6760,6 @@ void buf_pool_free_all() {
 bool buf_block_will_be_moved_to_nvdimm(const page_id_t &page_id) {
   if (page_id.space() == 4294967279 || page_id.space() == 4294967278 /* Undo tablespaces */
       || page_id.space() == 15 /* New-Orders table */) {
-      srv_stats.nvdimm_pages_read.inc();
-     // fprintf(stderr, "%u %u is directly moved to dram\n", page_id.space(), page_id.page_no());
       return (true);
   } else {
       return (false);
