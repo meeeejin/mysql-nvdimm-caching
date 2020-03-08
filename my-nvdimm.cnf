@@ -57,6 +57,7 @@ innodb_max_dirty_pages_pct_lwm=0
 innodb_use_nvdimm_buffer=true
 innodb_nvdimm_buffer_pool_size=2G
 innodb_nvdimm_buffer_pool_instances=1
+innodb_nvdimm_pc_threshold_pct=5
 
 #etc
 log_error_verbosity=3
@@ -73,7 +74,7 @@ innodb_log_buffer_size=32M
 innodb_flush_neighbors=0
 
 #doublewrite and flush method
-innodb_doublewrite=ON
+innodb_doublewrite=OFF
 innodb_flush_method=O_DIRECT
 
 #AIO control
@@ -84,13 +85,14 @@ innodb_lru_scan_depth=1024
 # etc settings
 max_connections = 1024
 open_files_limit = 24000
-wait_timeout = 30
+#wait_timeout = 100000
 #innodb_empty_free_list_algorithm=backoff
 
 # io settings
 innodb_io_capacity = 100000
-#innodb_write_io_threads = 64
-#innodb_read_io_threads = 64
+innodb_io_capacity_max = 200000
+innodb_write_io_threads = 32
+innodb_read_io_threads = 32
 
 # monitoring settings
 #performance-schema-instrument='wait/synch/mutex/innodb/%=ON'

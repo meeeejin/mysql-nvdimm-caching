@@ -83,6 +83,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifdef UNIV_NVDIMM_CACHE
 #include "buf0nvdimm.h"
 bool nvdimm_flush_check = false;
+ulint nvdimm_pc_threshold;
 #endif /* UNIV_NVDIMM_CACHE */
 
 #ifdef HAVE_LIBNUMA
@@ -1518,6 +1519,8 @@ static void nvdimm_buf_pool_create(buf_pool_t *buf_pool, ulint buf_pool_size,
 
   NVDIMM_DEBUG_PRINT("NVDIMM buffer pool %lu is created with %lu capacity (%lu)\n",
       buf_pool->instance_no, buf_pool->curr_pool_size, buf_pool->curr_size);
+
+  nvdimm_pc_threshold = (buf_pool_size / srv_page_size * srv_nvdimm_pc_threshold_pct) / 100;
 
   err = DB_SUCCESS;
 }
@@ -5561,7 +5564,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
           ulint remains = UT_LIST_GET_LEN(buf_pool->free);
           //mutex_exit(&buf_pool->free_list_mutex);
 
-          if (/*!nvdimm_flush_check && */remains < 10000) {
+          if (/*!nvdimm_flush_check && */remains < nvdimm_pc_threshold) {
               //nvdimm_flush_check = true;
               os_event_set(buf_flush_nvdimm_event);
           }

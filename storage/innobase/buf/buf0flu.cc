@@ -1857,8 +1857,7 @@ static ulint buf_flush_nvdimm_LRU_list_batch(buf_pool_t *buf_pool, ulint max) {
       buf_page_t *prev = UT_LIST_GET_PREV(LRU, bpage);
       buf_pool->lru_hp.set(prev);
 
-      if (bpage->id.space() != 17)  continue;
-      //if (bpage->id.space() != 17 && bpage->id.space() != 19)  continue;
+      if (bpage->id.space() != 17 && bpage->id.space() != 19)  continue;
       
       BPageMutex *block_mutex = buf_page_get_mutex(bpage);
 

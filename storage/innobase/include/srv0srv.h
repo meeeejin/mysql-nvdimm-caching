@@ -459,6 +459,8 @@ extern bool srv_use_nvdimm_buf;
 extern ulint srv_nvdimm_buf_pool_size;
 /** Requested number of NVDIMM buffer pool instances */
 extern ulong srv_nvdimm_buf_pool_instances;
+/** Wakeup the NVDIMM page cleaner when this % of free pages remaining */
+extern ulong srv_nvdimm_pc_threshold_pct;
 #endif /* UNIV_NVDIMM_CACHE */
 
 /** Dedicated server setting */

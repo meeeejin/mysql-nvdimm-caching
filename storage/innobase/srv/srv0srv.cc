@@ -377,6 +377,8 @@ bool srv_use_nvdimm_buf = FALSE;
 ulint srv_nvdimm_buf_pool_size = ULINT_MAX;
 /** Requested number of NVDIMM buffer pool instances */
 ulong srv_nvdimm_buf_pool_instances = 1;
+/** Wakeup the NVDIMM page cleaner when this % of free pages remaining */
+ulong srv_nvdimm_pc_threshold_pct = 2;
 #endif /* UNIV_NVDIMM_CACHE */
 
 /** Dedicated server setting */

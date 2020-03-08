@@ -21401,6 +21401,12 @@ static MYSQL_SYSVAR_ULONG(nvdimm_buffer_pool_instances, srv_nvdimm_buf_pool_inst
                           PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
                           "Number of buffer pool instances for NVDIMM",
                           NULL, NULL, 1, 1, 8, 0);
+
+static MYSQL_SYSVAR_ULONG(nvdimm_pc_threshold_pct, srv_nvdimm_pc_threshold_pct,
+                          PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
+                          "The ratio of remaining free pages to determine when "
+                          "the page cleaner to wakeup for NVDIMM buffer",
+                          NULL, NULL, 5, 0, 50, 0);
 #endif /* UNIV_NVDIMM_CACHE */
 
 static SYS_VAR *innobase_system_variables[] = {
@@ -21611,6 +21617,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(use_nvdimm_buffer),
     MYSQL_SYSVAR(nvdimm_buffer_pool_size),
     MYSQL_SYSVAR(nvdimm_buffer_pool_instances),
+    MYSQL_SYSVAR(nvdimm_pc_threshold_pct),
 #endif /* UNIV_NVDIMM_CACHE */
     NULL};
 
