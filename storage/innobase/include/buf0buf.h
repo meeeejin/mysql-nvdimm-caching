@@ -1183,6 +1183,10 @@ class buf_page_t {
   /** Count of how manyfold this block is currently bufferfixed. */
   uint32_t buf_fix_count;
 
+  /* mijin*/
+  uint32_t buf_total_fix_count;
+  /* end */
+
   /** type of pending I/O operation. */
   buf_io_fix io_fix;
 
@@ -1191,11 +1195,7 @@ class buf_page_t {
 
   /** if this block is currently being flushed to disk, this tells
   the flush_type.  @see buf_flush_t */
-//#ifdef UNIV_NVDIMM_CACHE
-//  unsigned flush_type : 3;
-//#else
   unsigned flush_type : 2;
-//#endif /* UNIV_NVDIMM_CACHE */
 
   /** index number of the buffer pool that this block belongs to */
   unsigned buf_pool_index : 6;

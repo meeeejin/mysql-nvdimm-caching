@@ -2138,12 +2138,6 @@ static bool buf_LRU_block_remove_hashed(buf_page_t *bpage, bool zip,
   ut_ad(bpage->in_page_hash);
   ut_d(bpage->in_page_hash = FALSE);
 
-#ifdef UNIV_NVDIMM_CACHE
-  /*if (buf_pool->instance_no == 8) {
-    srv_stats.nvdimm_pages_stored.dec();
-  }*/
-#endif /* UNIV_NVDIMM_CACHE */
-
   HASH_DELETE(buf_page_t, hash, buf_pool->page_hash, bpage->id.fold(), bpage);
 
   switch (buf_page_get_state(bpage)) {

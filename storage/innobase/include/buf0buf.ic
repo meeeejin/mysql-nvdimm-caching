@@ -855,6 +855,9 @@ UNIV_INLINE
 ulint buf_block_fix(buf_page_t *bpage) {
   ib_uint32_t count;
   count = os_atomic_increment_uint32(&bpage->buf_fix_count, 1);
+  /* mijin */
+  count = os_atomic_increment_uint32(&bpage->buf_total_fix_count, 1);
+  /* end */
   ut_ad(count > 0);
   return (count);
 }

@@ -98,17 +98,17 @@ struct srv_stats_t {
   ulint_ctr_1_t dblwr_pages_written;
 
 #ifdef UNIV_NVDIMM_CACHE
-  /** Store the number of pages that have been read from the
-    NVDIMM buffer */
-  ulint_ctr_1_t nvdimm_pages_read;
+  /** Store the number of Stock pages that currently been
+  stored in the NVDIMM buffer */
+  ulint_ctr_1_t nvdimm_pages_stored_st;
 
-  /** Store the number of pages that have been written to the
-    NVDIMM buffer */
-  ulint_ctr_1_t nvdimm_pages_written;
+  /** Store the number of Order-Line pages that currently been
+  stored in the NVDIMM buffer */
+  ulint_ctr_1_t nvdimm_pages_stored_ol;
 
-  /** Store the number of pages that currently been stored in
-    the NVDIMM buffer */
-  ulint_ctr_1_t nvdimm_pages_stored;
+  /** Store the number of New-Orders/UNDO pages that currently
+  been stored in the NVDIMM buffer */
+  ulint_ctr_1_t nvdimm_pages_stored_no_undo;
 #endif /* UNIV_NVDIMM_CACHE */
 
   /** Store the number of write requests issued */
@@ -1005,9 +1005,9 @@ struct export_var_t {
   ulint innodb_dblwr_pages_written;            /*!< srv_dblwr_pages_written */
   ulint innodb_dblwr_writes;                   /*!< srv_dblwr_writes */
 #ifdef UNIV_NVDIMM_CACHE
-  ulint innodb_nvdimm_pages_read;         /*!< srv_nvdimm_pages_read */
-  ulint innodb_nvdimm_pages_written;      /*!< srv_nvdimm_pages_written */
-  ulint innodb_nvdimm_pages_stored;       /*!< srv_nvdimm_pages_stored */
+  ulint innodb_nvdimm_pages_stored_st;      /*!< srv_nvdimm_pages_stored_st */
+  ulint innodb_nvdimm_pages_stored_ol;      /*!< srv_nvdimm_pages_stored_ol */
+  ulint innodb_nvdimm_pages_stored_no_undo; /*!< srv_nvdimm_pages_stored_no_undo */
 #endif /* UNIV_NVDIMM_CACHE */
   ulint innodb_log_waits;                      /*!< srv_log_waits */
   ulint innodb_log_write_requests;             /*!< srv_log_write_requests */

@@ -1208,24 +1208,21 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
 	  const page_size_t page_size = page_size_t(bpage->size.logical(), bpage->size.logical(), false);
 	  dberr_t err;
 
+      /*ib::info(ER_IB_MSG_126) << "(" << bpage->id.space() << ", " << bpage->id.page_no()
+          << ") is moved with oldest: " << bpage->oldest_modification
+          << " newest: " << before_lsn 
+          << " flush-type: " << bpage->flush_type;
+*/
 	  /* Add the target page to the NVDIMM buffer. */
 	  nvdimm_page = buf_page_init_for_read(&err, BUF_MOVE_TO_NVDIMM, page_id, page_size, false);
 	  memcpy(((buf_block_t *)nvdimm_page)->frame, ((buf_block_t *)bpage)->frame, UNIV_PAGE_SIZE);
 
       /* Set the oldest LSN of the NVDIMM page to the previous newest LSN. */
 	  buf_flush_note_modification((buf_block_t *)nvdimm_page, bpage->newest_modification, 0, nvdimm_page->flush_observer);
-	  
-      /*ib::info(ER_IB_MSG_126) << "(" << bpage->id.space() << ", " << bpage->id.page_no()
-          << ") is moved with oldest: " << bpage->oldest_modification
-          << " newest: " << before_lsn 
-          << " flush-type: " << bpage->flush_type;
-       */
+	   
       /* Remove the target page from the original buffer pool. */
       buf_page_io_complete(nvdimm_page);
 	  buf_page_io_complete(bpage, true);
-	  
-      //srv_stats.nvdimm_pages_stored.inc();
-      //srv_stats.nvdimm_pages_written.inc();
   } else {
     if (!srv_use_doublewrite_buf || buf_dblwr == NULL || srv_read_only_mode ||
         fsp_is_system_temporary(bpage->id.space()) || bpage->cached_in_nvdimm) {
@@ -1238,11 +1235,14 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
       dberr_t err;
       IORequest request(type);
       
-      /*ib::info(ER_IB_MSG_126) << "(" << bpage->id.space() << ", " << bpage->id.page_no()
+      /*if (bpage->cached_in_nvdimm) {
+        ib::info(ER_IB_MSG_126) << "(" << bpage->id.space() << ", " << bpage->id.page_no()
           << ") is written from " << bpage->cached_in_nvdimm
           << " with oldest: " << bpage->oldest_modification
-          << " newest: " << before_lsn 
-          << " flush-type: " << bpage->flush_type;*/
+          << " newest: " << bpage->newest_modification
+          << " fix-count: " << bpage->buf_total_fix_count;
+      }
+      */
 
       err = fil_io(request, sync, bpage->id, bpage->size, 0,
           bpage->size.physical(), frame, bpage);
@@ -1276,16 +1276,6 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
 
       dberr_t err;
       IORequest request(type);
-      /* mijin */
- /*     if (bpage->id.space() == 19) {
-      ib::info(ER_IB_MSG_126) << "(" << bpage->id.space() << ", " << bpage->id.page_no()
-        << ") is written with oldest: " << bpage->oldest_modification
-        << " newest: " << before_lsn 
-        << " root: " << page_is_root(reinterpret_cast<const buf_block_t *>(bpage)->frame)
-        << " leaf: " << page_is_leaf(reinterpret_cast<const buf_block_t *>(bpage)->frame)
-        << " flush-type: " << bpage->flush_type << " buf-fix-count: " << bpage->buf_fix_count;
-      }*/
-      /* end */
 
       err = fil_io(request, sync, bpage->id, bpage->size, 0,
           bpage->size.physical(), frame, bpage);
@@ -1449,7 +1439,7 @@ ibool buf_flush_page(buf_pool_t *buf_pool, buf_page_t *bpage,
           && page_is_leaf(frame) /* Leaf page */
           && !bpage->cached_in_nvdimm /* Not cached in NVDIMM */) {
         bpage->moved_to_nvdimm = true;
-        srv_stats.nvdimm_pages_written.inc();
+        srv_stats.nvdimm_pages_stored_ol.inc();
       }
     } else if (bpage->id.space() == 19 /* Stock tablespace */
             && bpage->buf_fix_count == 0 /* Not fixed */
@@ -1460,7 +1450,7 @@ ibool buf_flush_page(buf_pool_t *buf_pool, buf_page_t *bpage,
         /* FIXME: Ad-hoc method */
         if (40000000000 < lsn_gap && lsn_gap < 70000000000) {
             bpage->moved_to_nvdimm = true;
-            srv_stats.nvdimm_pages_stored.inc();
+            srv_stats.nvdimm_pages_stored_st.inc();
         }
     }
 #endif /* UNIV_NVDIMM_CACHE */ 
@@ -1857,6 +1847,7 @@ static ulint buf_flush_nvdimm_LRU_list_batch(buf_pool_t *buf_pool, ulint max) {
       buf_page_t *prev = UT_LIST_GET_PREV(LRU, bpage);
       buf_pool->lru_hp.set(prev);
 
+      //if (bpage->id.space() != 17)  continue;
       if (bpage->id.space() != 17 && bpage->id.space() != 19)  continue;
       
       BPageMutex *block_mutex = buf_page_get_mutex(bpage);
@@ -1878,10 +1869,6 @@ static ulint buf_flush_nvdimm_LRU_list_batch(buf_pool_t *buf_pool, ulint max) {
              free list in IO completion routine. */
           mutex_exit(block_mutex);
           buf_flush_page_and_try_neighbors(bpage, BUF_FLUSH_LRU, max, &count);
-
-          /*ib::info(ER_IB_MSG_126) << "(" << bpage->id.space() << ", " << bpage->id.page_no()
-              << ") is written from nvdimm with oldest: " << bpage->oldest_modification;
-      */
       } else if (!acquired) {
           ut_ad(buf_pool->lru_hp.is_hp(prev));
       } else {
