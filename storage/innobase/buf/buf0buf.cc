@@ -1519,10 +1519,10 @@ static void nvdimm_buf_pool_create(buf_pool_t *buf_pool, ulint buf_pool_size,
   /* Initialize the iterator for single page scan search */
   new (&buf_pool->single_scan_itr) LRUItr(buf_pool, &buf_pool->LRU_list_mutex);
 
-  NVDIMM_DEBUG_PRINT("NVDIMM buffer pool %lu is created with %lu capacity (%lu)\n",
-      buf_pool->instance_no, buf_pool->curr_pool_size, buf_pool->curr_size);
-
   nvdimm_pc_threshold = (buf_pool_size / srv_page_size * srv_nvdimm_pc_threshold_pct) / 100;
+  
+  NVDIMM_DEBUG_PRINT("NVDIMM buffer pool %lu is created with %lu capacity (%lu) and wakeup threshold %lu\n",
+    buf_pool->instance_no, buf_pool->curr_pool_size, buf_pool->curr_size, nvdimm_pc_threshold);
 
   err = DB_SUCCESS;
 }
@@ -5533,7 +5533,6 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
   removes the newest lock debug record, without checking the thread
   id. */
 
-  /* mijin: TODO: need to add the NVDIMM monitoring info */
   buf_page_monitor(bpage, io_type);
 
   switch (io_type) {
@@ -6474,7 +6473,11 @@ void buf_print_io(FILE *file) /*!< in/out: buffer where to print */
 
   os_rmb;
 
-  for (i = 0; i < srv_buf_pool_instances + 1; i++) { /* end */
+#ifdef UNIV_NVDIMM_CACHE
+  for (i = 0; i < srv_buf_pool_instances + 1; i++) {
+#else
+  for (i = 0; i < srv_buf_pool_instances; i++) {
+#endif /* UNIV_NVDIMM_CACHE */
     buf_pool_t *buf_pool;
 
     buf_pool = buf_pool_from_array(i);

@@ -1429,7 +1429,7 @@ ibool buf_flush_page(buf_pool_t *buf_pool, buf_page_t *bpage,
 #ifdef UNIV_NVDIMM_CACHE
     /* Separate Order-Line leaf page from the other pages. */
     if (bpage->id.space() == 17 /* Order-Line tablespace */
-        && bpage->buf_fix_count == 0) {
+        && bpage->buf_fix_count == 0 /* Not fixed */) {
       const byte *frame = 
         bpage->zip.data != NULL ? bpage->zip.data : ((buf_block_t *)bpage)->frame;
 
