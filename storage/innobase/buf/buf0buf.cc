@@ -5557,6 +5557,16 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       os_atomic_increment_ulint(&buf_pool->stat.n_pages_read, 1);
       
 #ifdef UNIV_NVDIMM_CACHE
+      if (bpage->cached_in_nvdimm) {
+        if (bpage->id.space() == 17) {
+          srv_stats.nvdimm_pages_read_ol.inc();
+        } else if (bpage->id.space() == 19) {
+          srv_stats.nvdimm_pages_read_st.inc();
+        } else {
+        srv_stats.nvdimm_pages_read_no_undo.inc();
+        }
+      }
+
       if (buf_pool->instance_no == 8) {
           bpage->cached_in_nvdimm = true;
 
@@ -5565,8 +5575,8 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
           //mutex_exit(&buf_pool->free_list_mutex);
 
           if (remains < nvdimm_pc_threshold) {
-              os_event_set(buf_flush_nvdimm_event);
-          }
+            os_event_set(buf_flush_nvdimm_event);
+          } 
       }
 #endif /* UNIV_NVDIMM_CACHE */
 
@@ -5583,6 +5593,16 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       }
 
       os_atomic_increment_ulint(&buf_pool->stat.n_pages_written, 1);
+
+      if (bpage->cached_in_nvdimm) {
+        if (bpage->id.space() == 17) {
+          srv_stats.nvdimm_pages_written_ol.inc();
+        } else if (bpage->id.space() == 19) {
+          srv_stats.nvdimm_pages_written_st.inc();
+        } else {
+          srv_stats.nvdimm_pages_written_no_undo.inc();
+        }
+      }
 
       /* We decide whether or not to evict the page from the
       LRU list based on the flush_type.
@@ -6364,6 +6384,28 @@ static void buf_print_nvdimm_instance(
       (ulint)srv_stats.nvdimm_pages_stored_no_undo,
       (ulint)srv_stats.nvdimm_pages_stored_ol,
       (ulint)srv_stats.nvdimm_pages_stored_st);
+
+  fprintf(file,
+      "---The number of pages read\n"
+      "New-Orders/UNDO " ULINTPF
+      "\n"
+      "Order-Line      " ULINTPF
+      "\n"
+      "Stock           " ULINTPF "\n",
+      (ulint)srv_stats.nvdimm_pages_read_no_undo,
+      (ulint)srv_stats.nvdimm_pages_read_ol,
+      (ulint)srv_stats.nvdimm_pages_read_st);
+
+  fprintf(file,
+      "---The number of pages written\n"
+      "New-Orders/UNDO " ULINTPF
+      "\n"
+      "Order-Line      " ULINTPF
+      "\n"
+      "Stock           " ULINTPF "\n",
+      (ulint)srv_stats.nvdimm_pages_written_no_undo,
+      (ulint)srv_stats.nvdimm_pages_written_ol,
+      (ulint)srv_stats.nvdimm_pages_written_st);
 
   fprintf(file, "Total number of page gets performed = " ULINTPF "\n", pool_info->n_page_gets);
 }

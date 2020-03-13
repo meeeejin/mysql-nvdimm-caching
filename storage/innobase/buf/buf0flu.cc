@@ -1448,9 +1448,10 @@ ibool buf_flush_page(buf_pool_t *buf_pool, buf_page_t *bpage,
         lsn_t lsn_gap = bpage->oldest_modification - before_lsn;
 
         /* FIXME: Ad-hoc method */
-        if (40000000000 < lsn_gap && lsn_gap < 70000000000) {
+        if (10000000000 < lsn_gap && lsn_gap < 70000000000) {
             bpage->moved_to_nvdimm = true;
             srv_stats.nvdimm_pages_stored_st.inc();
+            //fprintf(stderr, "try..\n");
         }
     }
 #endif /* UNIV_NVDIMM_CACHE */ 

@@ -1524,6 +1524,18 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_nvdimm_pages_stored_ol = srv_stats.nvdimm_pages_stored_ol;
 
   export_vars.innodb_nvdimm_pages_stored_no_undo = srv_stats.nvdimm_pages_stored_no_undo;
+
+  export_vars.innodb_nvdimm_pages_read_st = srv_stats.nvdimm_pages_read_st;
+
+  export_vars.innodb_nvdimm_pages_read_ol = srv_stats.nvdimm_pages_read_ol;
+
+  export_vars.innodb_nvdimm_pages_read_no_undo = srv_stats.nvdimm_pages_read_no_undo;
+
+  export_vars.innodb_nvdimm_pages_written_st = srv_stats.nvdimm_pages_written_st;
+
+  export_vars.innodb_nvdimm_pages_written_ol = srv_stats.nvdimm_pages_written_ol;
+
+  export_vars.innodb_nvdimm_pages_written_no_undo = srv_stats.nvdimm_pages_written_no_undo;
 #endif /* UNIV_NVDIMM_CACHE */
 
   export_vars.innodb_pages_created = stat.n_pages_created;

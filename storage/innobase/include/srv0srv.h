@@ -109,6 +109,24 @@ struct srv_stats_t {
   /** Store the number of New-Orders/UNDO pages that currently
   been stored in the NVDIMM buffer */
   ulint_ctr_1_t nvdimm_pages_stored_no_undo;
+
+  /** Store the number of Stock pages that been read */
+  ulint_ctr_1_t nvdimm_pages_read_st;
+
+  /** Store the number of Order-Line pages that been read */
+  ulint_ctr_1_t nvdimm_pages_read_ol;
+
+  /** Store the number of New-Orders/UNDO pages that been read */
+  ulint_ctr_1_t nvdimm_pages_read_no_undo;
+
+  /** Store the number of Stock pages that been written */
+  ulint_ctr_1_t nvdimm_pages_written_st;
+
+  /** Store the number of Order-Line pages that been written */
+  ulint_ctr_1_t nvdimm_pages_written_ol;
+
+  /** Store the number of New-Orders/UNDO pages that been written */
+  ulint_ctr_1_t nvdimm_pages_written_no_undo;
 #endif /* UNIV_NVDIMM_CACHE */
 
   /** Store the number of write requests issued */
@@ -1005,9 +1023,15 @@ struct export_var_t {
   ulint innodb_dblwr_pages_written;            /*!< srv_dblwr_pages_written */
   ulint innodb_dblwr_writes;                   /*!< srv_dblwr_writes */
 #ifdef UNIV_NVDIMM_CACHE
-  ulint innodb_nvdimm_pages_stored_st;      /*!< srv_nvdimm_pages_stored_st */
-  ulint innodb_nvdimm_pages_stored_ol;      /*!< srv_nvdimm_pages_stored_ol */
-  ulint innodb_nvdimm_pages_stored_no_undo; /*!< srv_nvdimm_pages_stored_no_undo */
+  ulint innodb_nvdimm_pages_stored_st;       /*!< srv_nvdimm_pages_stored_st */
+  ulint innodb_nvdimm_pages_stored_ol;       /*!< srv_nvdimm_pages_stored_ol */
+  ulint innodb_nvdimm_pages_stored_no_undo;  /*!< srv_nvdimm_pages_stored_no_undo */
+  ulint innodb_nvdimm_pages_read_st;         /*!< srv_nvdimm_pages_read_st */
+  ulint innodb_nvdimm_pages_read_ol;         /*!< srv_nvdimm_pages_read_ol */
+  ulint innodb_nvdimm_pages_read_no_undo;    /*!< srv_nvdimm_pages_read_no_undo */
+  ulint innodb_nvdimm_pages_written_st;      /*!< srv_nvdimm_pages_written_st */
+  ulint innodb_nvdimm_pages_written_ol;      /*!< srv_nvdimm_pages_written_ol */
+  ulint innodb_nvdimm_pages_written_no_undo; /*!< srv_nvdimm_pages_written_no_undo */
 #endif /* UNIV_NVDIMM_CACHE */
   ulint innodb_log_waits;                      /*!< srv_log_waits */
   ulint innodb_log_write_requests;             /*!< srv_log_write_requests */
