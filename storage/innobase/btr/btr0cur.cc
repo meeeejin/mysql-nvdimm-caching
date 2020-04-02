@@ -251,6 +251,18 @@ btr_latch_leaves_t btr_cur_latch_leaves(buf_block_t *block,
       /* Sanity check only after both the blocks are latched. */
       if (latch_leaves.blocks[0] != NULL) {
         ut_a(page_is_comp(latch_leaves.blocks[0]->frame) == page_is_comp(page));
+       
+       /* mijin */
+        if (btr_page_get_next(latch_leaves.blocks[0]->frame, mtr) != page_get_page_no(page)) {
+            fprintf(stderr, "(%u - %u) %u != (%u) %u (%u) (in %u)\n",
+            btr_page_get_prev(latch_leaves.blocks[0]->frame, mtr),
+            page_get_page_no(latch_leaves.blocks[0]->frame),
+            btr_page_get_next(latch_leaves.blocks[0]->frame, mtr),
+            btr_page_get_prev(page, mtr),
+            page_get_page_no(page),
+            btr_page_get_next(page, mtr),
+            page_get_space_id(page));
+        }
         ut_a(btr_page_get_next(latch_leaves.blocks[0]->frame, mtr) ==
              page_get_page_no(page));
       }
@@ -274,6 +286,12 @@ btr_latch_leaves_t btr_cur_latch_leaves(buf_block_t *block,
         latch_leaves.blocks[2] = get_block;
 #ifdef UNIV_BTR_DEBUG
         ut_a(page_is_comp(get_block->frame) == page_is_comp(page));
+        /* mijin */
+        if (btr_page_get_prev(get_block->frame, mtr) != page_get_page_no(page)) {
+            fprintf(stderr, "%u != %u (%u)\n", btr_page_get_prev(get_block->frame, mtr),
+                    page_get_page_no(page), page_get_space_id(page));
+        }
+
         ut_a(btr_page_get_prev(get_block->frame, mtr) ==
              page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
@@ -3501,7 +3519,7 @@ dberr_t btr_cur_update_in_place(
   nvm_bpage = &(nvm_block->page);
   
   if (nvm_bpage->cached_in_nvdimm) {
-      /*skip generating REDO logs for NVM-resident pages*/
+      // skip generating REDO logs for NVM-resident pages
   } else {
       btr_cur_update_in_place_log(flags, rec, index, update, trx_id, roll_ptr, mtr);
   }
@@ -4431,7 +4449,7 @@ dberr_t btr_cur_del_mark_set_clust_rec(
   row_upd_rec_sys_fields(rec, page_zip, index, offsets, trx, roll_ptr);
 #ifdef UNIV_NVDIMM_CACHE
   if (is_nvm_page) {
-	  /*skip generating REDO logs for nvm-page*/
+	  // skip generating REDO logs for nvm-page
   } else {
 	btr_cur_del_mark_set_clust_rec_log(rec, index, trx->id, roll_ptr, mtr);
   }

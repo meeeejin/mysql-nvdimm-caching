@@ -52,6 +52,10 @@ extern bool innodb_page_cleaner_disabled_debug;
 /** Event to synchronise with the flushing. */
 extern os_event_t buf_flush_event;
 
+#ifdef UNIV_NVDIMM_CACHE
+extern os_event_t buf_flush_nvdimm_event;
+#endif /* UNIV_NVDIMM_CACHE */
+
 class ut_stage_alter_t;
 
 /** Remove a block from the flush list of modified blocks.

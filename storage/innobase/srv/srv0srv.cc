@@ -377,6 +377,8 @@ bool srv_use_nvdimm_buf = FALSE;
 ulint srv_nvdimm_buf_pool_size = ULINT_MAX;
 /** Requested number of NVDIMM buffer pool instances */
 ulong srv_nvdimm_buf_pool_instances = 1;
+/** Wakeup the NVDIMM page cleaner when this % of free pages remaining */
+ulong srv_nvdimm_pc_threshold_pct = 2;
 #endif /* UNIV_NVDIMM_CACHE */
 
 /** Dedicated server setting */
@@ -1099,6 +1101,9 @@ static void srv_init(void) {
     srv_buf_dump_event = os_event_create(0);
 
     buf_flush_event = os_event_create("buf_flush_event");
+#ifdef UNIV_NVDIMM_CACHE
+    buf_flush_nvdimm_event = os_event_create("buf_flush_nvdimm_event");
+#endif /* UNIV_NVDIMM_CACHE */
 
     UT_LIST_INIT(srv_sys->tasks, &que_thr_t::queue);
   }
@@ -1148,6 +1153,9 @@ void srv_free(void) {
     os_event_destroy(srv_monitor_event);
     os_event_destroy(srv_buf_dump_event);
     os_event_destroy(buf_flush_event);
+#ifdef UNIV_NVDIMM_CACHE
+    os_event_destroy(buf_flush_nvdimm_event);
+#endif /* UNIV_NVDIMM_CACHE */
   }
 
   os_event_destroy(srv_buf_resize_event);
@@ -1511,11 +1519,23 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_dblwr_writes = srv_stats.dblwr_writes;
 
 #ifdef UNIV_NVDIMM_CACHE
-  export_vars.innodb_nvdimm_pages_read = srv_stats.nvdimm_pages_read;
+  export_vars.innodb_nvdimm_pages_stored_st = srv_stats.nvdimm_pages_stored_st;
 
-  export_vars.innodb_nvdimm_pages_written = srv_stats.nvdimm_pages_written;
+  export_vars.innodb_nvdimm_pages_stored_ol = srv_stats.nvdimm_pages_stored_ol;
 
-  export_vars.innodb_nvdimm_pages_stored = srv_stats.nvdimm_pages_stored;
+  export_vars.innodb_nvdimm_pages_stored_no_undo = srv_stats.nvdimm_pages_stored_no_undo;
+
+  export_vars.innodb_nvdimm_pages_read_st = srv_stats.nvdimm_pages_read_st;
+
+  export_vars.innodb_nvdimm_pages_read_ol = srv_stats.nvdimm_pages_read_ol;
+
+  export_vars.innodb_nvdimm_pages_read_no_undo = srv_stats.nvdimm_pages_read_no_undo;
+
+  export_vars.innodb_nvdimm_pages_written_st = srv_stats.nvdimm_pages_written_st;
+
+  export_vars.innodb_nvdimm_pages_written_ol = srv_stats.nvdimm_pages_written_ol;
+
+  export_vars.innodb_nvdimm_pages_written_no_undo = srv_stats.nvdimm_pages_written_no_undo;
 #endif /* UNIV_NVDIMM_CACHE */
 
   export_vars.innodb_pages_created = stat.n_pages_created;

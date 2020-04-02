@@ -1283,8 +1283,8 @@ loop:
 
   if (n_iterations > 20 && srv_buf_pool_old_size == srv_buf_pool_size) {
     ib::warn(ER_IB_MSG_134)
-        << "Difficult to find free blocks in the buffer pool"
-           " ("
+        << "Difficult to find free blocks in the buffer pool" << buf_pool->instance_no
+        << " ("
         << n_iterations << " search iterations)! " << flush_failures
         << " failed attempts to"
            " flush a page! Consider increasing the buffer pool"
@@ -1312,7 +1312,15 @@ loop:
   page_cleaner do an LRU batch for us. */
 
   if (!srv_read_only_mode) {
+#ifdef UNIV_NVDIMM_CACHE
+      if (buf_pool->instance_no == 8) {
+          os_event_set(buf_flush_nvdimm_event);
+      } else {
+          os_event_set(buf_flush_event);
+      }
+#else
     os_event_set(buf_flush_event);
+#endif /* UNIV_NVDIMM_CACHE */
   }
 
   if (n_iterations > 1) {
@@ -2129,12 +2137,6 @@ static bool buf_LRU_block_remove_hashed(buf_page_t *bpage, bool zip,
   ut_ad(!bpage->in_zip_hash);
   ut_ad(bpage->in_page_hash);
   ut_d(bpage->in_page_hash = FALSE);
-
-#ifdef UNIV_NVDIMM_CACHE
-  if (buf_pool->instance_no == 8) {
-    srv_stats.nvdimm_pages_stored.dec();
-  }
-#endif /* UNIV_NVDIMM_CACHE */
 
   HASH_DELETE(buf_page_t, hash, buf_pool->page_hash, bpage->id.fold(), bpage);
 

@@ -1183,6 +1183,10 @@ class buf_page_t {
   /** Count of how manyfold this block is currently bufferfixed. */
   uint32_t buf_fix_count;
 
+  /* mijin*/
+  uint32_t buf_total_fix_count;
+  /* end */
+
   /** type of pending I/O operation. */
   buf_io_fix io_fix;
 
@@ -1321,6 +1325,8 @@ class buf_page_t {
 #ifdef UNIV_NVDIMM_CACHE
   bool cached_in_nvdimm; /*!< TRUE if the page is cached
                          in the NVDIMM buffer */
+  bool moved_to_nvdimm; /*!< TRUE if the page needs to
+                         be moved to the NVDIMM buffer */
 #endif /* UNIV_NVDIMM_CACHE */
 };
 

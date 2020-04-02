@@ -205,7 +205,9 @@ static ulint trx_undo_page_set_next_prev_and_add(
   /* Write this log entry to the UNDO log */
 #ifdef UNIV_NVDIMM_CACHE
   if (is_nvm_page){
-      /*skip generate UNDO logs and REDO logs of UNDO page*/
+      // skip generate UNDO logs and REDO logs of UNDO page
+      // FIXME(jhpark): (INSERT) allow to write UNDO + REDO of UNDO log in mtr log heap
+      trx_undof_page_add_undo_rec_log(undo_page, first_free, end_of_rec, mtr);
   } else {
       trx_undof_page_add_undo_rec_log(undo_page, first_free, end_of_rec, mtr);
   }
@@ -1617,6 +1619,8 @@ static ulint trx_undo_page_report_modify(
   /*Skip write REDO log for UNDO page of hot pages*/
   if (true) {
 	  /*skip*/
+      // FIXME(jhpark): (UPDATE) allow to write UNDO + REDO of UNDO log in mtr log heap
+      trx_undof_page_add_undo_rec_log(undo_page, first_free, ptr - undo_page, mtr);
   } else {
 	trx_undof_page_add_undo_rec_log(undo_page, first_free, ptr - undo_page, mtr);
   }
@@ -2221,7 +2225,18 @@ dberr_t trx_undo_report_row_operation(
     } else {
       /* Success */
       undo->withdraw_clock = buf_withdraw_clock;
+      
+      // FIXME(jhpark): for NVDIMM resident pages, we don't need to flush mtr log to WAL log buffer
+      //                                  just release the mtr structure.
+#ifdef UNIV_NVDIMM_CACHE
+      if (is_nvm_page) {
+          mtr_commit_nvm(&mtr);
+      } else {
+          mtr_commit(&mtr);
+      }
+#else
       mtr_commit(&mtr);
+#endif /* UNIV_NVDIMM_CACHE */
 
       undo->empty = FALSE;
       undo->top_page_no = page_no;

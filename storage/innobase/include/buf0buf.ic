@@ -855,6 +855,9 @@ UNIV_INLINE
 ulint buf_block_fix(buf_page_t *bpage) {
   ib_uint32_t count;
   count = os_atomic_increment_uint32(&bpage->buf_fix_count, 1);
+  /* mijin */
+  count = os_atomic_increment_uint32(&bpage->buf_total_fix_count, 1);
+  /* end */
   ut_ad(count > 0);
   return (count);
 }
@@ -934,7 +937,7 @@ buf_pool_t *buf_pool_get(const page_id_t &page_id) {
 #ifdef UNIV_NVDIMM_CACHE
   if (buf_block_will_be_moved_to_nvdimm(page_id)) {
     return (&nvdimm_buf_pool_ptr[0]);
-  } else if (page_id.space() == 17 &&
+  } else if ((page_id.space() == 17/* || page_id.space() == 19*/) &&
       buf_page_hash_get_low(&nvdimm_buf_pool_ptr[0], page_id)) {
     return (&nvdimm_buf_pool_ptr[0]);
   } else {

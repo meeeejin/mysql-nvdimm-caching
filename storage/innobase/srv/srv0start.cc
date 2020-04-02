@@ -1691,6 +1691,9 @@ void srv_shutdown_all_bg_threads() {
       }
 
       os_event_set(buf_flush_event);
+#ifdef UNIV_NVDIMM_CACHE
+      os_event_set(buf_flush_nvdimm_event);
+#endif /* UNIV_NVDIMM_CACHE */
 
       if (!buf_page_cleaner_is_active && os_aio_all_slots_free()) {
         os_aio_wake_all_threads_at_shutdown();

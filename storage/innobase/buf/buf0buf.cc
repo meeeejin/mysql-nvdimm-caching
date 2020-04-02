@@ -82,6 +82,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #ifdef UNIV_NVDIMM_CACHE
 #include "buf0nvdimm.h"
+ulint nvdimm_pc_threshold;
 #endif /* UNIV_NVDIMM_CACHE */
 
 #ifdef HAVE_LIBNUMA
@@ -757,6 +758,9 @@ static void buf_block_init(
   block->page.buf_pool_index = buf_pool_index(buf_pool);
   block->page.state = BUF_BLOCK_NOT_USED;
   block->page.buf_fix_count = 0;
+  /* mijin */
+  block->page.buf_total_fix_count = 0;
+  /* end */
   block->page.io_fix = BUF_IO_NONE;
   block->page.flush_observer = NULL;
 
@@ -1515,8 +1519,10 @@ static void nvdimm_buf_pool_create(buf_pool_t *buf_pool, ulint buf_pool_size,
   /* Initialize the iterator for single page scan search */
   new (&buf_pool->single_scan_itr) LRUItr(buf_pool, &buf_pool->LRU_list_mutex);
 
-  NVDIMM_DEBUG_PRINT("NVDIMM buffer pool %lu is created with %lu capacity (%lu)\n",
-      buf_pool->instance_no, buf_pool->curr_pool_size, buf_pool->curr_size);
+  nvdimm_pc_threshold = (buf_pool_size / srv_page_size * srv_nvdimm_pc_threshold_pct) / 100;
+  
+  NVDIMM_DEBUG_PRINT("NVDIMM buffer pool %lu is created with %lu capacity (%lu) and wakeup threshold %lu\n",
+    buf_pool->instance_no, buf_pool->curr_pool_size, buf_pool->curr_size, nvdimm_pc_threshold);
 
   err = DB_SUCCESS;
 }
@@ -1784,7 +1790,9 @@ dberr_t nvdimm_buf_pool_init(ulint total_size, ulint n_instances) {
     i = n;
   }
 
+  //nvdimm_buf_LRU_old_ratio_update(100 * 2 / 3, FALSE);
   nvdimm_buf_LRU_old_ratio_update(100 * 3 / 8, FALSE);
+  //nvdimm_buf_LRU_old_ratio_update(100 * 0.95, FALSE);
 
   return (DB_SUCCESS);
 }
@@ -3803,12 +3811,6 @@ buf_block_t *Buf_fetch<T>::lookup() {
     return (nullptr);
   }
 
-#ifdef UNIV_NVDIMM_CACHE
-  if (m_buf_pool->instance_no == 8) {
-    srv_stats.nvdimm_pages_read.inc();
-  }
-#endif /* UNIV_NVDIMM_CACHE */
-
   return (block);
 }
 
@@ -3928,6 +3930,9 @@ dberr_t Buf_fetch<T>::zip_page_handler(buf_block_t *&fix_block) {
 
   /* Set after buf_relocate(). */
   block->page.buf_fix_count = 1;
+  /* mijin */
+  block->page.buf_total_fix_count = 1;
+  /* end */
 
   block->lock_hash_val = lock_rec_hash(m_page_id.space(), m_page_id.page_no());
 
@@ -4722,6 +4727,9 @@ void buf_page_init_low(buf_page_t *bpage) /*!< in: block to init */
   bpage->flush_type = BUF_FLUSH_LRU;
   bpage->io_fix = BUF_IO_NONE;
   bpage->buf_fix_count = 0;
+  /* mijin */
+  bpage->buf_total_fix_count = 0;
+  /* end */
   bpage->freed_page_clock = 0;
   bpage->access_time = 0;
   bpage->newest_modification = 0;
@@ -4730,6 +4738,7 @@ void buf_page_init_low(buf_page_t *bpage) /*!< in: block to init */
 
 #ifdef UNIV_NVDIMM_CACHE
   bpage->cached_in_nvdimm = false;
+  bpage->moved_to_nvdimm = false;
 #endif /* UNIV_NVDIMM_CACHE */
 
   ut_d(bpage->file_page_was_freed = FALSE);
@@ -4783,6 +4792,9 @@ static void buf_page_init(buf_pool_t *buf_pool, const page_id_t &page_id,
     ut_a(buf_fix_count > 0);
 
     os_atomic_increment_uint32(&block->page.buf_fix_count, buf_fix_count);
+    /* mijin */
+    os_atomic_increment_uint32(&block->page.buf_total_fix_count, buf_fix_count);
+    /* end */
 
     buf_pool_watch_remove(buf_pool, hash_page);
   } else {
@@ -4806,6 +4818,13 @@ static void buf_page_init(buf_pool_t *buf_pool, const page_id_t &page_id,
 
   HASH_INSERT(buf_page_t, hash, buf_pool->page_hash, page_id.fold(),
               &block->page);
+
+#ifdef UNIV_NVDIMM_CACHE
+  if (page_id.space() == 4294967279 || page_id.space() == 4294967278 /* Undo tablespaces */
+          || page_id.space() == 15 /* New-Orders table */) {
+    srv_stats.nvdimm_pages_stored_no_undo.inc();
+  } 
+#endif /* UNIV_NVDIMM_CACHE */
 
   if (page_size.is_compressed()) {
     page_zip_set_size(&block->page.zip, page_size.physical());
@@ -4863,11 +4882,7 @@ buf_page_t *buf_page_init_for_read(dberr_t *err, ulint mode,
       return (NULL);
     }
   } else {
-    ut_ad(mode == BUF_READ_ANY_PAGE
-#ifdef UNIV_NVDIMM_CACHE
-        || mode == BUF_MOVE_TO_NVDIMM
-#endif /* UNIV_NVDIMM_CACHE */
-	);
+    ut_ad(mode == BUF_READ_ANY_PAGE);
   }
   
   if (page_size.is_compressed() && !unzip && !recv_recovery_is_on()) {
@@ -5349,10 +5364,10 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
   ut_ad(io_type == BUF_IO_READ || io_type == BUF_IO_WRITE);
 
   if (io_type == BUF_IO_READ) {
-    page_no_t read_page_no;
-    space_id_t read_space_id;
-    byte *frame;
-    bool compressed_page;
+      page_no_t read_page_no;
+      space_id_t read_space_id;
+      byte *frame;
+      bool compressed_page;
 
     if (bpage->size.is_compressed()) {
       frame = bpage->zip.data;
@@ -5497,7 +5512,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
           buf_page_get_flush_type(bpage) == BUF_FLUSH_LRU ||
           buf_page_get_flush_type(bpage) == BUF_FLUSH_SINGLE_PAGE
 #ifdef UNIV_NVDIMM_CACHE
-          || buf_page_get_flush_type(bpage) == BUF_FLUSH_TO_NVDIMM
+          || bpage->moved_to_nvdimm
 #endif /* UNIV_NVDIMM_CACHE */
 	)) {
     have_LRU_mutex = true; /* optimistic */
@@ -5519,7 +5534,6 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
   removes the newest lock debug record, without checking the thread
   id. */
 
-  /* mijin: TODO: need to add the NVDIMM monitoring info */
   buf_page_monitor(bpage, io_type);
 
   switch (io_type) {
@@ -5537,21 +5551,34 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
         rw_lock_x_unlock_gen(&((buf_block_t *)bpage)->lock, BUF_IO_READ);
       }
 
-#ifdef UNIV_NVDIMM_CACHE
-      if (buf_pool->instance_no == 8) {
-        bpage->cached_in_nvdimm = true;
-        
-        srv_stats.nvdimm_pages_stored.inc();
-        srv_stats.nvdimm_pages_written.inc();
-      }
-#endif /* UNIV_NVDIMM_CACHE */
-
       mutex_exit(buf_page_get_mutex(bpage));
 
       ut_ad(buf_pool->n_pend_reads > 0);
       os_atomic_decrement_ulint(&buf_pool->n_pend_reads, 1);
       os_atomic_increment_ulint(&buf_pool->stat.n_pages_read, 1);
       
+#ifdef UNIV_NVDIMM_CACHE
+      if (buf_pool->instance_no == 8) {
+          bpage->cached_in_nvdimm = true;
+          
+          if (bpage->id.space() == 17) {
+              srv_stats.nvdimm_pages_read_ol.inc();
+          } /*else if (bpage->id.space() == 19) {
+              srv_stats.nvdimm_pages_read_st.inc();
+          } */else {
+                  srv_stats.nvdimm_pages_read_no_undo.inc();
+          }
+
+          //mutex_enter(&buf_pool->free_list_mutex);
+          ulint remains = UT_LIST_GET_LEN(buf_pool->free);
+          //mutex_exit(&buf_pool->free_list_mutex);
+
+          if (remains < nvdimm_pc_threshold) {
+            os_event_set(buf_flush_nvdimm_event);
+          } 
+      }
+#endif /* UNIV_NVDIMM_CACHE */
+
       break;
 
     case BUF_IO_WRITE:
@@ -5559,12 +5586,22 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       routine in the flush system */
 
       buf_flush_write_complete(bpage);
-
+      
       if (uncompressed) {
         rw_lock_sx_unlock_gen(&((buf_block_t *)bpage)->lock, BUF_IO_WRITE);
       }
 
       os_atomic_increment_ulint(&buf_pool->stat.n_pages_written, 1);
+
+      if (bpage->cached_in_nvdimm) {
+        if (bpage->id.space() == 17) {
+          srv_stats.nvdimm_pages_written_ol.inc();
+        } /*else if (bpage->id.space() == 19) {
+          srv_stats.nvdimm_pages_written_st.inc();
+        } */else {
+          srv_stats.nvdimm_pages_written_no_undo.inc();
+        }
+      }
 
       /* We decide whether or not to evict the page from the
       LRU list based on the flush_type.
@@ -5572,24 +5609,22 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       * BUF_FLUSH_LRU: always evict
       * BUF_FLUSH_SINGLE_PAGE: eviction preference is passed
       by the caller explicitly. */
-      if (buf_page_get_flush_type(bpage) == BUF_FLUSH_LRU
-#ifdef UNIV_NVDIMM_CACHE
-          || buf_page_get_flush_type(bpage) == BUF_FLUSH_TO_NVDIMM
-#endif /* UNIV_NVDIMM_CACHE */
-	 ) {
+      if (buf_page_get_flush_type(bpage) == BUF_FLUSH_LRU) {
         evict = true;
         ut_ad(have_LRU_mutex);
       }
 
       if (evict && buf_LRU_free_page(bpage, true)) {
         have_LRU_mutex = false;
+#ifdef NVDIMM_CACHE
+        bpage->moved_to_nvdimm = false;
+#endif /* NVDIMM_CACHE */
       } else {
         mutex_exit(buf_page_get_mutex(bpage));
       }
       if (have_LRU_mutex) {
         mutex_exit(&buf_pool->LRU_list_mutex);
       }
-
       break;
 
     default:
@@ -6335,35 +6370,43 @@ void buf_stats_get_pool_info(
 #ifdef UNIV_NVDIMM_CACHE
 /** Prints specific info of the NVDIMM buffer. */
 static void buf_print_nvdimm_instance(
-    buf_pool_t *buf_pool,       /*!< in: buffer pool */
     buf_pool_info_t *pool_info, /*!< in: buffer pool info */
     FILE *file)                 /*!< in/out: buffer where to print */
 {
-  time_t current_time;
-  double time_elapsed;
-  double nvdimm_usage_rate = 0;
-  double pages_read_rate = 0;
-  double pages_written_rate = 0;
-
-  current_time = time(NULL);
-  time_elapsed = 0.001 + difftime(current_time, buf_pool->last_printout_time);
-
-  nvdimm_usage_rate = ((ulint)srv_stats.nvdimm_pages_stored) / buf_pool->curr_size;
-
-  pages_read_rate =
-    srv_stats.nvdimm_pages_read / time_elapsed;
-
-  pages_written_rate =
-    srv_stats.nvdimm_pages_written / time_elapsed;
+  fprintf(file,
+      "---The number of pages stored in NVDIMM buffer\n"
+      "New-Orders/UNDO " ULINTPF
+      "\n"
+      "Order-Line      " ULINTPF
+      "\n"
+      "Stock           " ULINTPF "\n",
+      (ulint)srv_stats.nvdimm_pages_stored_no_undo,
+      (ulint)srv_stats.nvdimm_pages_stored_ol,
+      (ulint)srv_stats.nvdimm_pages_stored_st);
 
   fprintf(file,
-      "Buffer pool usage rate %lu / %lu = %.2f,"
-      " page read rate %.2f (%lu) and page written rate %.2f (%lu)\n",
-      (ulint)srv_stats.nvdimm_pages_stored, buf_pool->curr_size,
-      nvdimm_usage_rate, pages_read_rate, (ulint)srv_stats.nvdimm_pages_read,
-      pages_written_rate, (ulint)srv_stats.nvdimm_pages_written);
+      "---The number of pages read\n"
+      "New-Orders/UNDO " ULINTPF
+      "\n"
+      "Order-Line      " ULINTPF
+      "\n"
+      "Stock           " ULINTPF "\n",
+      (ulint)srv_stats.nvdimm_pages_read_no_undo,
+      (ulint)srv_stats.nvdimm_pages_read_ol,
+      (ulint)srv_stats.nvdimm_pages_read_st);
 
-  fprintf(file, "Total gets: " ULINTPF "\n", pool_info->n_page_gets);
+  fprintf(file,
+      "---The number of pages written\n"
+      "New-Orders/UNDO " ULINTPF
+      "\n"
+      "Order-Line      " ULINTPF
+      "\n"
+      "Stock           " ULINTPF "\n",
+      (ulint)srv_stats.nvdimm_pages_written_no_undo,
+      (ulint)srv_stats.nvdimm_pages_written_ol,
+      (ulint)srv_stats.nvdimm_pages_written_st);
+
+  fprintf(file, "Total number of page gets performed = " ULINTPF "\n", pool_info->n_page_gets);
 }
 #endif /* UNIV_NVDIMM_CACHE */
 
@@ -6471,7 +6514,11 @@ void buf_print_io(FILE *file) /*!< in/out: buffer where to print */
 
   os_rmb;
 
-  for (i = 0; i < srv_buf_pool_instances + 1; i++) { /* end */
+#ifdef UNIV_NVDIMM_CACHE
+  for (i = 0; i < srv_buf_pool_instances + 1; i++) {
+#else
+  for (i = 0; i < srv_buf_pool_instances; i++) {
+#endif /* UNIV_NVDIMM_CACHE */
     buf_pool_t *buf_pool;
 
     buf_pool = buf_pool_from_array(i);
@@ -6514,7 +6561,7 @@ void buf_print_io(FILE *file) /*!< in/out: buffer where to print */
 
   fprintf(file, "---BUFFER POOL " ULINTPF "\n", i);
   buf_print_io_instance(&pool_info[i], file);
-  buf_print_nvdimm_instance(&nvdimm_buf_pool_ptr[0], &pool_info[i], file);
+  buf_print_nvdimm_instance(&pool_info[i], file);
 #endif /* UNIV_NVDIMM_CACHE */
 
   ut_free(pool_info);
@@ -6720,9 +6767,9 @@ void buf_pool_free_all() {
 bool buf_block_will_be_moved_to_nvdimm(const page_id_t &page_id) {
   if (page_id.space() == 4294967279 || page_id.space() == 4294967278 /* Undo tablespaces */
       || page_id.space() == 15 /* New-Orders table */) {
-    return (true);
+      return (true);
   } else {
-    return (false);
+      return (false);
   }
 }
 #endif /* UNIV_NVDIMM_CACHE */

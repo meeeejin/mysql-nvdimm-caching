@@ -68,9 +68,6 @@ enum buf_flush_t {
                          of dirty blocks */
   BUF_FLUSH_SINGLE_PAGE, /*!< flush via the LRU list
                          but only a single page */
-#ifdef UNIV_NVDIMM_CACHE
-  BUF_FLUSH_TO_NVDIMM,   /*!< flush to the NVDIMM buffer */
-#endif /* UNIV_NVDIMM_CACHE */
   BUF_FLUSH_N_TYPES      /*!< index of last element + 1  */
 };
 
