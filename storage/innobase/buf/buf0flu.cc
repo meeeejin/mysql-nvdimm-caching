@@ -1218,7 +1218,7 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
 	  memcpy(((buf_block_t *)nvdimm_page)->frame, ((buf_block_t *)bpage)->frame, UNIV_PAGE_SIZE);
 
       /* Set the oldest LSN of the NVDIMM page to the previous newest LSN. */
-	  buf_flush_note_modification((buf_block_t *)nvdimm_page, bpage->newest_modification, 0, nvdimm_page->flush_observer);
+	  buf_flush_note_modification((buf_block_t *)nvdimm_page, bpage->newest_modification, bpage->newest_modification, nvdimm_page->flush_observer);
 	   
       /* Remove the target page from the original buffer pool. */
       buf_page_io_complete(nvdimm_page);
@@ -1241,8 +1241,7 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
           << " with oldest: " << bpage->oldest_modification
           << " newest: " << bpage->newest_modification
           << " fix-count: " << bpage->buf_total_fix_count;
-      }
-      */
+      }*/
 
       err = fil_io(request, sync, bpage->id, bpage->size, 0,
           bpage->size.physical(), frame, bpage);
@@ -1441,7 +1440,9 @@ ibool buf_flush_page(buf_pool_t *buf_pool, buf_page_t *bpage,
         bpage->moved_to_nvdimm = true;
         srv_stats.nvdimm_pages_stored_ol.inc();
       }
-    } else if (bpage->id.space() == 19 /* Stock tablespace */
+    } 
+#if 0
+    else if (bpage->id.space() == 19 /* Stock tablespace */
             && bpage->buf_fix_count == 0 /* Not fixed */
             && !bpage->cached_in_nvdimm /* Not cached in NVDIMM */) {
         lsn_t before_lsn = mach_read_from_8(reinterpret_cast<const buf_block_t *>(bpage)->frame + FIL_PAGE_LSN);
@@ -1454,6 +1455,7 @@ ibool buf_flush_page(buf_pool_t *buf_pool, buf_page_t *bpage,
             //fprintf(stderr, "try..\n");
         }
     }
+#endif
 #endif /* UNIV_NVDIMM_CACHE */ 
 
     /* If there is an observer that want to know if the asynchronous
@@ -1848,8 +1850,8 @@ static ulint buf_flush_nvdimm_LRU_list_batch(buf_pool_t *buf_pool, ulint max) {
       buf_page_t *prev = UT_LIST_GET_PREV(LRU, bpage);
       buf_pool->lru_hp.set(prev);
 
-      //if (bpage->id.space() != 17)  continue;
-      if (bpage->id.space() != 17 && bpage->id.space() != 19)  continue;
+      if (bpage->id.space() != 17)  continue;
+      //if (bpage->id.space() != 17 && bpage->id.space() != 19)  continue;
       
       BPageMutex *block_mutex = buf_page_get_mutex(bpage);
 

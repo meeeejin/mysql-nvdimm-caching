@@ -1790,6 +1790,7 @@ dberr_t nvdimm_buf_pool_init(ulint total_size, ulint n_instances) {
     i = n;
   }
 
+  //nvdimm_buf_LRU_old_ratio_update(100 * 2 / 3, FALSE);
   nvdimm_buf_LRU_old_ratio_update(100 * 3 / 8, FALSE);
   //nvdimm_buf_LRU_old_ratio_update(100 * 0.95, FALSE);
 
@@ -5557,18 +5558,16 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       os_atomic_increment_ulint(&buf_pool->stat.n_pages_read, 1);
       
 #ifdef UNIV_NVDIMM_CACHE
-      if (bpage->cached_in_nvdimm) {
-        if (bpage->id.space() == 17) {
-          srv_stats.nvdimm_pages_read_ol.inc();
-        } else if (bpage->id.space() == 19) {
-          srv_stats.nvdimm_pages_read_st.inc();
-        } else {
-        srv_stats.nvdimm_pages_read_no_undo.inc();
-        }
-      }
-
       if (buf_pool->instance_no == 8) {
           bpage->cached_in_nvdimm = true;
+          
+          if (bpage->id.space() == 17) {
+              srv_stats.nvdimm_pages_read_ol.inc();
+          } /*else if (bpage->id.space() == 19) {
+              srv_stats.nvdimm_pages_read_st.inc();
+          } */else {
+                  srv_stats.nvdimm_pages_read_no_undo.inc();
+          }
 
           //mutex_enter(&buf_pool->free_list_mutex);
           ulint remains = UT_LIST_GET_LEN(buf_pool->free);
@@ -5597,9 +5596,9 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
       if (bpage->cached_in_nvdimm) {
         if (bpage->id.space() == 17) {
           srv_stats.nvdimm_pages_written_ol.inc();
-        } else if (bpage->id.space() == 19) {
+        } /*else if (bpage->id.space() == 19) {
           srv_stats.nvdimm_pages_written_st.inc();
-        } else {
+        } */else {
           srv_stats.nvdimm_pages_written_no_undo.inc();
         }
       }
