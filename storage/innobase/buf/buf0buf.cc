@@ -5593,6 +5593,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
 
       os_atomic_increment_ulint(&buf_pool->stat.n_pages_written, 1);
 
+#ifdef UNIV_NVDIMM_CACHE
       if (bpage->cached_in_nvdimm) {
         if (bpage->id.space() == 17) {
           srv_stats.nvdimm_pages_written_ol.inc();
@@ -5602,6 +5603,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
           srv_stats.nvdimm_pages_written_no_undo.inc();
         }
       }
+#endif /* UNIV_NVDIMM_CACHE */
 
       /* We decide whether or not to evict the page from the
       LRU list based on the flush_type.
